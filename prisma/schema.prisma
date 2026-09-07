@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkUnit {
+  PAIR
+  LEFT_FOOT
+  RIGHT_FOOT
+}
+
+enum ProductionKind {
+  STANDARD
+  RETURN
+}
+
+enum ProductionStatus {
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum SessionKind {
+  INITIAL
+  CONTINUATION
+}
+
+enum SessionEndReason {
+  PAUSE
+  SHIFT_END
+  NEXT_QR_SCAN
+  MANUAL_COMPLETION
+}
+
+model Role {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  active    Boolean    @default(true)
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Employee {
+  id          String            @id @default(cuid())
+  name        String
+  active      Boolean           @default(true)
+  roleId      String
+  role        Role              @relation(fields: [roleId], references: [id])
+  processes   EmployeeProcess[]
+  productions Production[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([roleId])
+  @@index([active])
+}
+
+model ProcessType {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  active      Boolean           @default(true)
+  rules       ProcessRule[]
+  employees   EmployeeProcess[]
+  productions Production[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([active])
+}
+
+model ProcessRule {
+  id               String      @id @default(cuid())
+  processTypeId    String
+  processType      ProcessType @relation(fields: [processTypeId], references: [id])
+  unit             WorkUnit
+  commissionAmount Decimal     @db.Decimal(10, 2)
+  active           Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([processTypeId, unit])
+  @@index([active])
+}
+
+model EmployeeProcess {
+  employeeId    String
+  processTypeId String
+  employee      Employee    @relation(fields: [employeeId], references: [id])
+  processType   ProcessType @relation(fields: [processTypeId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@id([employeeId, processTypeId])
+}
+
+model Shoe {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  productions Production[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Production {
+  id                 String           @id @default(cuid())
+  shoeId             String
+  processTypeId      String
+  employeeId         String
+  unit               WorkUnit
+  kind               ProductionKind
+  status             ProductionStatus @default(IN_PROGRESS)
+  sourceProductionId String?
+  startedAt          DateTime         @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  shoe             Shoe             @relation(fields: [shoeId], references: [id])
+  processType      ProcessType      @relation(fields: [processTypeId], references: [id])
+  employee         Employee         @relation(fields: [employeeId], references: [id])
+  sourceProduction Production?      @relation("ProductionReturns", fields: [sourceProductionId], references: [id])
+  returns          Production[]     @relation("ProductionReturns")
+  sessions         WorkSession[]
+  commission       CommissionEntry?
+
+  @@index([shoeId])
+  @@index([processTypeId])
+  @@index([employeeId])
+  @@index([sourceProductionId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model WorkSession {
+  id           String            @id @default(cuid())
+  productionId String
+  production   Production        @relation(fields: [productionId], references: [id])
+  kind         SessionKind
+  startedAt    DateTime          @default(now())
+  endedAt      DateTime?
+  endReason    SessionEndReason?
+  createdAt    DateTime          @default(now())
+
+  @@index([productionId])
+  @@index([startedAt])
+}
+
+model CommissionEntry {
+  id           String     @id @default(cuid())
+  productionId String     @unique
+  production   Production @relation(fields: [productionId], references: [id])
+  amount       Decimal    @db.Decimal(10, 2)
+  earnedAt     DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+
+  @@index([earnedAt])
+}
