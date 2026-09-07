@@ -38,27 +38,67 @@ enum SessionEndReason {
 }
 
 model Role {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  active    Boolean    @default(true)
-  employees Employee[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id          String           @id @default(cuid())
+  name        String           @unique
+  active      Boolean          @default(true)
+  employees   Employee[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id        String           @id @default(cuid())
+  code      String           @unique
+  name      String
+  roles     RolePermission[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@id([roleId, permissionId])
 }
 
 model Employee {
-  id          String            @id @default(cuid())
-  name        String
-  active      Boolean           @default(true)
-  roleId      String
-  role        Role              @relation(fields: [roleId], references: [id])
-  processes   EmployeeProcess[]
-  productions Production[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                 String              @id @default(cuid())
+  name               String
+  active             Boolean             @default(true)
+  roleId             String
+  pinHash            String?
+  mustChangePin      Boolean             @default(false)
+  failedPinAttempts  Int                 @default(0)
+  pinLockedUntil     DateTime?
+  role               Role                @relation(fields: [roleId], references: [id])
+  processes          EmployeeProcess[]
+  productions        Production[]
+  managementSessions ManagementSession[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([roleId])
   @@index([active])
+  @@index([pinLockedUntil])
+}
+
+model ManagementSession {
+  id         String    @id @default(cuid())
+  employeeId String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([expiresAt])
 }
 
 model ProcessType {

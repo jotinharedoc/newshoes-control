@@ -4,7 +4,15 @@ async function main() {
   const [employees, processes, rules] = await Promise.all([
     prisma.employee.findMany({
       include: {
-        role: true,
+       role: {
+  include: {
+    permissions: {
+      include: {
+        permission: true,
+      },
+    },
+  },
+},
         processes: {
           include: {
             processType: true,
@@ -39,10 +47,15 @@ async function main() {
   console.table(
     employees.map((employee) => ({
       nome: employee.name,
-      cargo: employee.role.name,
-      processos: employee.processes
-        .map((permission) => permission.processType.name)
-        .join(", "),
+cargo: employee.role.name,
+pinConfigurado: Boolean(employee.pinHash),
+trocaPinObrigatoria: employee.mustChangePin,
+permissoes: employee.role.permissions
+  .map((item) => item.permission.code)
+  .join(", "),
+processos: employee.processes
+  .map((permission) => permission.processType.name)
+  .join(", "),
     })),
   );
 

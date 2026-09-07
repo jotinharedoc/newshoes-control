@@ -1,7 +1,12 @@
 import { prisma } from "../lib/prisma";
 import { WorkUnit } from "../lib/generated/prisma/client";
+import { hash } from "bcryptjs";
 
-async function findOrCreateEmployee(name: string, roleId: string) {
+async function findOrCreateEmployee(
+  name: string,
+  roleId: string,
+  initialPinHash?: string,
+) {
   const existingEmployee = await prisma.employee.findFirst({
     where: { name },
   });
@@ -12,6 +17,12 @@ async function findOrCreateEmployee(name: string, roleId: string) {
       data: {
         roleId,
         active: true,
+        ...(initialPinHash && !existingEmployee.pinHash
+          ? {
+              pinHash: initialPinHash,
+              mustChangePin: true,
+            }
+          : {}),
       },
     });
   }
@@ -20,9 +31,13 @@ async function findOrCreateEmployee(name: string, roleId: string) {
     data: {
       name,
       roleId,
+      pinHash: initialPinHash,
+      mustChangePin: Boolean(initialPinHash),
     },
   });
 }
+
+
 
 async function allowProcess(employeeId: string, processTypeId: string) {
   return prisma.employeeProcess.upsert({
@@ -52,6 +67,33 @@ async function main() {
     update: { active: true },
     create: { name: "Gerência" },
   });
+
+  const managementAccess = await prisma.permission.upsert({
+  where: {
+    code: "management.access",
+  },
+  update: {
+    name: "Acessar gerência",
+  },
+  create: {
+    code: "management.access",
+    name: "Acessar gerência",
+  },
+});
+
+await prisma.rolePermission.upsert({
+  where: {
+    roleId_permissionId: {
+      roleId: managementRole.id,
+      permissionId: managementAccess.id,
+    },
+  },
+  update: {},
+  create: {
+    roleId: managementRole.id,
+    permissionId: managementAccess.id,
+  },
+});
 
   const hygiene = await prisma.processType.upsert({
     where: { name: "Higienização" },
@@ -161,12 +203,37 @@ async function main() {
     },
   });
 
-  const joao = await findOrCreateEmployee("João", employeeRole.id);
-  const julia = await findOrCreateEmployee("Julia", employeeRole.id);
-  const paola = await findOrCreateEmployee("Paola", employeeRole.id);
+  const temporaryPinHash = await hash("0000", 12);
 
-  await findOrCreateEmployee("Maria Eduarda", managementRole.id);
-  await findOrCreateEmployee("Murilo", managementRole.id);
+const joao = await findOrCreateEmployee(
+  "João",
+  employeeRole.id,
+  temporaryPinHash,
+);
+
+const julia = await findOrCreateEmployee(
+  "Julia",
+  employeeRole.id,
+  temporaryPinHash,
+);
+
+const paola = await findOrCreateEmployee(
+  "Paola",
+  employeeRole.id,
+  temporaryPinHash,
+);
+
+await findOrCreateEmployee(
+  "Maria Eduarda",
+  managementRole.id,
+  temporaryPinHash,
+);
+
+await findOrCreateEmployee(
+  "Murilo",
+  managementRole.id,
+  temporaryPinHash,
+);
 
   await Promise.all([
     allowProcess(joao.id, hygiene.id),
