@@ -21,20 +21,29 @@ enum ProductionKind {
 enum ProductionStatus {
   IN_PROGRESS
   PAUSED
+  DEFERRED
   COMPLETED
   CANCELLED
 }
 
 enum SessionKind {
   INITIAL
+  RESUME
   CONTINUATION
 }
 
 enum SessionEndReason {
   PAUSE
+  LUNCH
+  DEFERRED
+  CANCELLED
   SHIFT_END
   NEXT_QR_SCAN
   MANUAL_COMPLETION
+}
+
+enum EmployeeBreakKind {
+  LUNCH
 }
 
 model Role {
@@ -67,20 +76,22 @@ model RolePermission {
 }
 
 model Employee {
-  id                 String              @id @default(cuid())
+  id                 String                 @id @default(cuid())
   name               String
-  active             Boolean             @default(true)
+  active             Boolean                @default(true)
   roleId             String
   pinHash            String?
-  mustChangePin      Boolean             @default(false)
-  failedPinAttempts  Int                 @default(0)
+  mustChangePin      Boolean                @default(false)
+  failedPinAttempts  Int                    @default(0)
   pinLockedUntil     DateTime?
-  role               Role                @relation(fields: [roleId], references: [id])
+  role               Role                   @relation(fields: [roleId], references: [id])
   processes          EmployeeProcess[]
   productions        Production[]
+  breaks             EmployeeBreak[]
   managementSessions ManagementSession[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  corrections        ManagementCorrection[] @relation("ManagementCorrectionActor")
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
   @@index([roleId])
   @@index([active])
@@ -147,26 +158,31 @@ model Shoe {
 }
 
 model Production {
-  id                 String           @id @default(cuid())
-  shoeId             String
-  processTypeId      String
-  employeeId         String
-  unit               WorkUnit
-  kind               ProductionKind
-  status             ProductionStatus @default(IN_PROGRESS)
-  sourceProductionId String?
-  startedAt          DateTime         @default(now())
-  completedAt        DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  id                       String           @id @default(cuid())
+  shoeId                   String
+  processTypeId            String
+  employeeId               String
+  unit                     WorkUnit
+  kind                     ProductionKind
+  status                   ProductionStatus @default(IN_PROGRESS)
+  sourceProductionId       String?
+  returnReason             String?
+  commissionAmountSnapshot Decimal          @db.Decimal(10, 2)
+  version                  Int              @default(0)
+  startedAt                DateTime         @default(now())
+  completedAt              DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
-  shoe             Shoe             @relation(fields: [shoeId], references: [id])
-  processType      ProcessType      @relation(fields: [processTypeId], references: [id])
-  employee         Employee         @relation(fields: [employeeId], references: [id])
-  sourceProduction Production?      @relation("ProductionReturns", fields: [sourceProductionId], references: [id])
-  returns          Production[]     @relation("ProductionReturns")
+  shoe             Shoe                   @relation(fields: [shoeId], references: [id])
+  processType      ProcessType            @relation(fields: [processTypeId], references: [id])
+  employee         Employee               @relation(fields: [employeeId], references: [id])
+  sourceProduction Production?            @relation("ProductionReturns", fields: [sourceProductionId], references: [id], onDelete: Restrict)
+  returns          Production[]           @relation("ProductionReturns")
   sessions         WorkSession[]
   commission       CommissionEntry?
+  pausedByBreaks   EmployeeBreak[]        @relation("PausedProductionBreak")
+  corrections      ManagementCorrection[]
 
   @@index([shoeId])
   @@index([processTypeId])
@@ -177,17 +193,60 @@ model Production {
 }
 
 model WorkSession {
-  id           String            @id @default(cuid())
+  id           String                 @id @default(cuid())
   productionId String
-  production   Production        @relation(fields: [productionId], references: [id])
+  production   Production             @relation(fields: [productionId], references: [id])
   kind         SessionKind
-  startedAt    DateTime          @default(now())
+  startedAt    DateTime               @default(now())
   endedAt      DateTime?
   endReason    SessionEndReason?
-  createdAt    DateTime          @default(now())
+  createdAt    DateTime               @default(now())
+  corrections  ManagementCorrection[]
 
   @@index([productionId])
   @@index([startedAt])
+}
+
+model EmployeeBreak {
+  id                 String            @id @default(cuid())
+  employeeId         String
+  kind               EmployeeBreakKind @default(LUNCH)
+  pausedProductionId String?
+  startedAt          DateTime          @default(now())
+  endedAt            DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  employee         Employee               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  pausedProduction Production?            @relation("PausedProductionBreak", fields: [pausedProductionId], references: [id], onDelete: Restrict)
+  corrections      ManagementCorrection[]
+
+  @@index([employeeId])
+  @@index([pausedProductionId])
+  @@index([startedAt])
+}
+
+model ManagementCorrection {
+  id              String   @id @default(cuid())
+  actorEmployeeId String
+  reason          String
+  beforeData      Json
+  afterData       Json
+  productionId    String?
+  workSessionId   String?
+  employeeBreakId String?
+  createdAt       DateTime @default(now())
+
+  actor         Employee       @relation("ManagementCorrectionActor", fields: [actorEmployeeId], references: [id], onDelete: Restrict)
+  production    Production?    @relation(fields: [productionId], references: [id], onDelete: Restrict)
+  workSession   WorkSession?   @relation(fields: [workSessionId], references: [id], onDelete: Restrict)
+  employeeBreak EmployeeBreak? @relation(fields: [employeeBreakId], references: [id], onDelete: Restrict)
+
+  @@index([actorEmployeeId])
+  @@index([productionId])
+  @@index([workSessionId])
+  @@index([employeeBreakId])
+  @@index([createdAt])
 }
 
 model CommissionEntry {
