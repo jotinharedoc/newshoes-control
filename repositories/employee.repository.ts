@@ -4,6 +4,7 @@ export async function findActiveEmployees() {
   return prisma.employee.findMany({
     where: {
       active: true,
+      role: { active: true },
     },
     select: {
       id: true,

@@ -1,7 +1,10 @@
 export type AuthErrorCode =
   | "INVALID_INPUT"
   | "INVALID_CREDENTIALS"
-  | "ACCOUNT_LOCKED";
+  | "INVALID_SESSION"
+  | "ACCOUNT_LOCKED"
+  | "PIN_CHANGE_REQUIRED"
+  | "FORBIDDEN";
 
 export class AuthError extends Error {
   constructor(

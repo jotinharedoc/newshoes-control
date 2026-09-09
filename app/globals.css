@@ -1,8 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b0d0f;
+  --foreground: #f5f7f8;
+
+  --surface: #13171a;
+  --surface-soft: #191e22;
+  --surface-hover: #20262b;
+
+  --border: #2a3136;
+  --border-strong: #394249;
+
+  --brand: #00aee9;
+  --brand-hover: #18baf1;
+  --brand-soft: rgba(0, 174, 233, 0.12);
+
+  --text-primary: #f5f7f8;
+  --text-secondary: #9ca7ad;
+  --text-muted: #69757c;
+
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
 }
 
 @theme inline {
@@ -12,15 +31,73 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(0, 174, 233, 0.08),
+      transparent 28rem
+    ),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.auth-input {
+  @apply mt-2 block w-full rounded-2xl px-4 py-3.5 text-base outline-none transition;
+
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.auth-input:hover {
+  border-color: var(--border-strong);
+}
+
+.auth-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.auth-input option {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.primary-button {
+  @apply rounded-2xl px-5 py-3.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--brand-hover);
+  transform: translateY(-1px);
+}
+
+.primary-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
 }
