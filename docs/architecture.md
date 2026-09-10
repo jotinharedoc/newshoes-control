@@ -34,7 +34,7 @@ A autenticação passou em testes com persistência simulada. Ainda falta valida
 - Almoço é um registro do funcionário, separado da produção. Não há pausas automáticas em horários fixos.
 - Correções materiais são gerenciais, com autor, data e motivo.
 - Valores alterados valem para produções futuras e não modificam comissões históricas.
-- A decisão expressamente pendente no manual é se retorno mantém o código original ou recebe outro código. Resolver antes da modelagem definitiva.
+- Decisão confirmada por João: retorno mantém o código original e o mesmo registro de `Shoe`. Registrar o retrabalho como uma nova produção `RETURN`, vinculada à produção original, com motivo obrigatório e sem nova comissão. Essa regra ainda precisa ser implementada.
 
 Essas regras de produção ainda não foram implementadas. O schema atual precisa ser complementado conforme a etapa 2 do manual, incluindo motivo de retorno, almoço e auditoria.
 

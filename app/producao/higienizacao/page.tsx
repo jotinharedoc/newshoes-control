@@ -1,10 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { CodeReader } from "@/components/production/code-reader";
 import { requirePageAccess } from "@/lib/auth-page";
+import { getHygieneOverview } from "@/services/production.service";
+import { ProductionError } from "@/types/production-error.types";
 
 export default async function CleaningPage() {
   const employee = await requirePageAccess();
+  let initialOverview;
+
+  try {
+    initialOverview = await getHygieneOverview(employee.id);
+  } catch (error) {
+    if (error instanceof ProductionError && error.code === "PROCESS_NOT_AUTHORIZED") {
+      redirect("/producao");
+    }
+    throw error;
+  }
 
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
@@ -38,10 +51,10 @@ export default async function CleaningPage() {
           </div>
 
           <div className="mt-8">
-           <CodeReader
-  employeeName={employee.name}
-  processName="Higienização"
-/>
+            <CodeReader
+              employeeName={employee.name}
+              initialOverview={initialOverview}
+            />
           </div>
         </section>
       </div>

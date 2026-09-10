@@ -16,6 +16,28 @@ export const prisma = {
     create: (args: Prisma.ManagementSessionCreateArgs) => unexpectedQuery(args),
     updateMany: (args: Prisma.ManagementSessionUpdateManyArgs) => unexpectedQuery(args),
   },
+  employeeProcess: {
+    findFirst: (args: Prisma.EmployeeProcessFindFirstArgs) => unexpectedQuery(args),
+  },
+  production: {
+    findFirst: (args: Prisma.ProductionFindFirstArgs) => unexpectedQuery(args),
+    findMany: (args: Prisma.ProductionFindManyArgs) => unexpectedQuery(args),
+    create: (args: Prisma.ProductionCreateArgs) => unexpectedQuery(args),
+    updateMany: (args: Prisma.ProductionUpdateManyArgs) => unexpectedQuery(args),
+  },
+  shoe: {
+    upsert: (args: Prisma.ShoeUpsertArgs) => unexpectedQuery(args),
+  },
+  workSession: {
+    updateMany: (args: Prisma.WorkSessionUpdateManyArgs) => unexpectedQuery(args),
+    create: (args: Prisma.WorkSessionCreateArgs) => unexpectedQuery(args),
+  },
+  commissionEntry: {
+    create: (args: Prisma.CommissionEntryCreateArgs) => unexpectedQuery(args),
+  },
+  $transaction: async (
+    operation: (client: PrismaClient) => Promise<unknown>,
+  ) => operation(prisma as unknown as PrismaClient),
 };
 
 (globalThis as unknown as { prisma: PrismaClient }).prisma = prisma as unknown as PrismaClient;

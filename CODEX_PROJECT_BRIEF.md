@@ -207,7 +207,7 @@ O modelo existente se chama `ManagementSession`, embora a sessão já seja usada
 - Pintura é opcional.
 - Se o mesmo calçado voltar meses depois para um novo serviço, recebe outro código e vira outra entrada.
 
-Decisão ainda pendente: quando for retorno por problema, confirmar se o tênis mantém o código original ou recebe um código novo. Não assumir essa regra na implementação definitiva.
+Decisão confirmada por João: quando for retorno por problema, o tênis mantém o mesmo código original e o mesmo registro de `Shoe`. O retrabalho é registrado como uma nova produção de tipo `RETURN`, vinculada à produção original, com motivo obrigatório e sem gerar nova comissão.
 
 ---
 
@@ -414,7 +414,7 @@ Se o sistema crescer para várias unidades ou muitos usuários simultâneos, a a
 
 ### Etapa 2 — Consolidar a modelagem da produção
 
-- Resolver a decisão pendente sobre o código usado no retorno.
+- Aplicar a decisão confirmada: retorno mantém o código original e o mesmo `Shoe`, com uma nova produção `RETURN` vinculada à produção original.
 - Modelar motivo obrigatório do retorno.
 - Modelar almoço/intervalo do funcionário.
 - Modelar auditoria de correções gerenciais.
