@@ -1,373 +1,472 @@
 "use client";
 
-import { ActiveProduction } from "@/components/production/active-production";
-import { useState } from "react";
-
+import { useEffect, useState } from "react";
 import { CameraScanner } from "@/components/production/camera-scanner";
 
-type FinalizationType = "PAIR" | "LEFT_FOOT" | "RIGHT_FOOT";
-type ProductionKind = "STANDARD" | "RETURN" | "CONTINUATION";
+type Unit = "PAIR" | "LEFT_FOOT" | "RIGHT_FOOT";
+type Action = "pause" | "resume" | "defer" | "continue" | "finish";
 
-type FinalizationReaderProps = {
+type Production = {
+  id: string;
+  code: string;
+  processName: string;
+  unit: Unit;
+  status: "IN_PROGRESS" | "PAUSED" | "DEFERRED" | "COMPLETED" | "CANCELLED";
+  version: number;
+  elapsedMilliseconds: number;
+  observedAt: string;
+};
+
+type Overview = {
+  current: Production | null;
+  deferred: Production[];
+};
+
+type Snapshot = {
+  overview: Overview;
+  receivedAt: number;
+};
+
+type Props = {
   employeeName: string;
 };
 
-const finalizationOptions: {
-  value: FinalizationType;
-  label: string;
-}[] = [
-  {
-    value: "PAIR",
-    label: "Par completo",
-  },
-  {
-    value: "LEFT_FOOT",
-    label: "Pé esquerdo",
-  },
-  {
-    value: "RIGHT_FOOT",
-    label: "Pé direito",
-  },
+const endpoint = "/api/production/finalization";
+
+const options: { value: Unit; label: string }[] = [
+  { value: "PAIR", label: "Par completo" },
+  { value: "LEFT_FOOT", label: "Pé esquerdo" },
+  { value: "RIGHT_FOOT", label: "Pé direito" },
 ];
 
-export function FinalizationReader({
-  employeeName,
-}: FinalizationReaderProps) {
-  const [code, setCode] = useState("");
-  const [type, setType] = useState<FinalizationType>("PAIR");
-  const [kind, setKind] = useState<ProductionKind>("STANDARD");
-  const [returnReason, setReturnReason] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [active, setActive] = useState(false);
+const primary =
+  "w-full rounded-2xl bg-(--brand) px-4 py-3.5 font-semibold text-white transition hover:bg-(--brand-hover) disabled:opacity-50 disabled:cursor-not-allowed";
 
-  const isReturn = kind === "RETURN";
-  const isContinuation = kind === "CONTINUATION";
+const secondary =
+  "w-full rounded-2xl border border-(--border-strong) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover) disabled:opacity-50 disabled:cursor-not-allowed";
 
-  function handleDetected(detectedCode: string) {
-    setCode(detectedCode);
+const panel =
+  "rounded-2xl border border-(--border) bg-(--surface-soft) p-5";
+
+async function requestOverview(
+  method: "GET" | "POST" | "PATCH",
+  body?: Record<string, unknown>,
+): Promise<Overview> {
+  const response = await fetch(endpoint, {
+    method,
+    cache: "no-store",
+    ...(body
+      ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : {}),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error?.message ?? "Não foi possível concluir a operação.",
+    );
   }
 
-  function handleKindChange(nextKind: ProductionKind) {
-    setKind(nextKind);
-    setConfirming(false);
-
-    if (nextKind !== "RETURN") {
-      setReturnReason("");
-    }
-  }
-
-  function handleContinue() {
-    if (code.length < 4) {
-      return;
-    }
-
-    if (isReturn && !returnReason.trim()) {
-      return;
-    }
-
-    setConfirming(true);
-  }
-
-  if (active) {
-  const selectedOption = finalizationOptions.find(
-    (option) => option.value === type,
-  );
-
-  return (
-    <ActiveProduction
-      code={code}
-      processName="Finalização"
-      employeeName={employeeName}
-      productionType={
-        kind === "RETURN"
-          ? `Retorno · ${selectedOption?.label}`
-          : kind === "CONTINUATION"
-            ? `Continuação · ${selectedOption?.label}`
-            : selectedOption?.label ?? "Produção normal"
-      }
-      onFinish={() => {
-        setActive(false);
-        setConfirming(false);
-        setCode("");
-        setReturnReason("");
-        setKind("STANDARD");
-        setType("PAIR");
-      }}
-    />
-  );
+  return data as Overview;
 }
 
-  if (confirming) {
-    const selectedOption = finalizationOptions.find(
-      (option) => option.value === type,
-    );
+function errorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Não foi possível comunicar com o servidor.";
+}
 
-    return (
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--brand)">
-            Confirmar produção
-          </p>
+function formatTime(milliseconds: number) {
+  const seconds = Math.floor(Math.max(0, milliseconds) / 1000);
 
-          <h2 className="mt-2 text-2xl font-semibold text-(--text-primary)">
-            Confira os dados
-          </h2>
+  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const remaining = String(seconds % 60).padStart(2, "0");
 
-          <div className="mt-6 space-y-3">
-            <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                Código
-              </p>
+  return `${hours}:${minutes}:${remaining}`;
+}
 
-              <p className="mt-1 text-2xl font-semibold tracking-wide text-(--text-primary)">
-                {code}
-              </p>
-            </div>
+function unitLabel(unit: Unit) {
+  return options.find((option) => option.value === unit)?.label ?? unit;
+}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                  Processo
-                </p>
+export function FinalizationReader({ employeeName }: Props) {
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [clock, setClock] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-                <p className="mt-1 font-semibold text-(--text-primary)">
-                  Finalização
-                </p>
-              </div>
+  const [code, setCode] = useState("");
+  const [unit, setUnit] = useState<Unit>("PAIR");
+  const [confirming, setConfirming] = useState(false);
 
-              <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                  Tipo
-                </p>
+  const current = snapshot?.overview.current ?? null;
 
-                <p className="mt-1 font-semibold text-(--text-primary)">
-                  {kind === "RETURN"
-                    ? "Retorno"
-                    : kind === "CONTINUATION"
-                      ? "Continuação"
-                      : "Produção normal"}
-                </p>
-              </div>
-            </div>
+  useEffect(() => {
+    let cancelled = false;
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                  Parte
-                </p>
+    requestOverview("GET")
+      .then((overview) => {
+        if (cancelled) return;
 
-                <p className="mt-1 font-semibold text-(--text-primary)">
-                  {selectedOption?.label}
-                </p>
-              </div>
+        const now = Date.now();
+        setSnapshot({ overview, receivedAt: now });
+        setClock(now);
+      })
+      .catch((failure: unknown) => {
+        if (!cancelled) setError(errorMessage(failure));
+      });
 
-              <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                  Funcionário
-                </p>
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-                <p className="mt-1 font-semibold text-(--text-primary)">
-                  {employeeName}
-                </p>
-              </div>
-            </div>
+  useEffect(() => {
+    if (current?.status !== "IN_PROGRESS") return;
 
-            {isReturn && (
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-amber-400">
-                  Motivo do retorno
-                </p>
+    const timer = window.setInterval(() => {
+      setClock(Date.now());
+    }, 1000);
 
-                <p className="mt-2 text-sm leading-6 text-(--text-primary)">
-                  {returnReason}
-                </p>
-              </div>
-            )}
+    return () => window.clearInterval(timer);
+  }, [current?.id, current?.status]);
 
-            {isContinuation && (
-              <div className="rounded-2xl border border-(--brand) bg-(--brand-soft) p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-(--brand)">
-                  Continuação
-                </p>
-
-                <p className="mt-2 text-sm text-(--text-primary)">
-                  Retomada de uma finalização já iniciada.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="w-full rounded-2xl bg-(--brand) px-4 py-3.5 font-semibold text-white transition hover:bg-(--brand-hover)"
-        >
-          Confirmar e iniciar
-        </button>
-
-        <button
-     type="button"
-  onClick={() => setConfirming(false)}
-  className="w-full rounded-2xl border border-(--border-strong) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover)"
->
-  Voltar e corrigir
-</button>
-      </div>
-    );
+  function applyOverview(overview: Overview) {
+    const now = Date.now();
+    setSnapshot({ overview, receivedAt: now });
+    setClock(now);
   }
 
+  async function refresh() {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setConfirming(false);
+
+    try {
+      applyOverview(await requestOverview("GET"));
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function start() {
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const overview = await requestOverview("POST", {
+        code: code.trim(),
+        unit,
+        kind: "STANDARD",
+      });
+
+      applyOverview(overview);
+      setConfirming(false);
+      setCode("");
+      setMessage("Finalização iniciada e salva.");
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeState(production: Production, action: Action) {
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const overview = await requestOverview("PATCH", {
+        productionId: production.id,
+        version: production.version,
+        action,
+      });
+
+      applyOverview(overview);
+      setConfirming(false);
+
+      const messages: Record<Action, string> = {
+        pause: "Produção pausada. O tempo da pausa não será contado.",
+        resume: "Produção retomada.",
+        defer: "Produção salva para continuar depois.",
+        continue: "Continuação iniciada no mesmo registro.",
+        finish: "Finalização concluída e comissão registrada.",
+      };
+
+      setMessage(messages[action]);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const elapsed =
+    (current?.elapsedMilliseconds ?? 0) +
+    (current?.status === "IN_PROGRESS" && snapshot
+      ? Math.max(0, clock - snapshot.receivedAt)
+      : 0);
+
+  const validCode = /^\d{1,64}$/.test(code.trim());
+
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm font-medium text-(--text-primary)">
-          Tipo do serviço
-        </p>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => handleKindChange("STANDARD")}
-            className={`rounded-2xl border p-4 text-center transition ${
-              kind === "STANDARD"
-                ? "border-(--brand) bg-(--brand-soft)"
-                : "border-(--border) bg-(--surface-soft) hover:bg-(--surface-hover)"
-            }`}
-          >
-            <p className="font-semibold text-(--text-primary)">
-              Produção normal
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleKindChange("RETURN")}
-            className={`rounded-2xl border p-4 text-center transition ${
-              kind === "RETURN"
-                ? "border-amber-400 bg-amber-500/10"
-                : "border-(--border) bg-(--surface-soft) hover:bg-(--surface-hover)"
-            }`}
-          >
-            <p className="font-semibold text-(--text-primary)">
-              Retorno
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleKindChange("CONTINUATION")}
-            className={`rounded-2xl border p-4 text-center transition ${
-              kind === "CONTINUATION"
-                ? "border-(--brand) bg-(--brand-soft)"
-                : "border-(--border) bg-(--surface-soft) hover:bg-(--surface-hover)"
-            }`}
-          >
-            <p className="font-semibold text-(--text-primary)">
-              Continuação
-            </p>
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <p className="text-sm font-medium text-(--text-primary)">
-          Tipo de finalização
-        </p>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {finalizationOptions.map((option) => {
-            const selected = type === option.value;
-
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setType(option.value)}
-                className={`rounded-2xl border p-4 text-center transition ${
-                  selected
-                    ? "border-(--brand) bg-(--brand-soft)"
-                    : "border-(--border) bg-(--surface-soft) hover:bg-(--surface-hover)"
-                }`}
-              >
-                <p className="font-semibold text-(--text-primary)">
-                  {option.label}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {isReturn && (
-        <div>
-          <label
-            htmlFor="finalization-return-reason"
-            className="text-sm font-medium text-(--text-primary)"
-          >
-            Motivo do retorno
-          </label>
-
-          <textarea
-            id="finalization-return-reason"
-            name="returnReason"
-            value={returnReason}
-            onChange={(event) => setReturnReason(event.target.value)}
-            rows={3}
-            className="auth-input resize-none"
-          />
+    <div className="space-y-5">
+      {error && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-400"
+        >
+          {error}
         </div>
       )}
 
-      <CameraScanner onDetected={handleDetected} />
-
-      <div className="flex items-center gap-4">
-        <div className="h-px flex-1 bg-(--border)" />
-
-        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-(--text-muted)">
-          ou
-        </span>
-
-        <div className="h-px flex-1 bg-(--border)" />
-      </div>
-
-      <div>
-        <label
-          htmlFor="finalization-code"
-          className="text-sm font-medium text-(--text-primary)"
+      {message && (
+        <p
+          role="status"
+          className="rounded-2xl bg-(--brand-soft) p-4 text-sm text-(--text-primary)"
         >
-          Código do tênis
-        </label>
+          {message}
+        </p>
+      )}
 
-        <input
-          id="finalization-code"
-          name="shoeCode"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]+"
-          maxLength={10}
-          value={code}
-          onChange={(event) => {
-            const value = event.target.value
-              .replace(/\D/g, "")
-              .slice(0, 10);
-
-            setCode(value);
-          }}
-          placeholder="Ex.: 1001693"
-          className="auth-input"
-        />
-      </div>
+      {!snapshot && !error && (
+        <p className="text-sm text-(--text-secondary)">
+          Carregando suas finalizações…
+        </p>
+      )}
 
       <button
         type="button"
-        onClick={handleContinue}
-        disabled={
-          code.length < 4 ||
-          (isReturn && !returnReason.trim())
-        }
-        className="w-full rounded-2xl bg-(--brand) px-4 py-3.5 font-semibold text-white transition hover:bg-(--brand-hover) disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={refresh}
+        disabled={busy}
+        className={secondary}
       >
-        Continuar
+        {busy ? "Aguarde…" : "Atualizar dados"}
       </button>
+
+      {current && (
+        <section className={`${panel} space-y-4`}>
+          <div>
+            <p className="text-sm text-(--text-secondary)">
+              {current.status === "PAUSED" ? "Pausada" : "Em andamento"}
+            </p>
+
+            <h2 className="mt-1 text-2xl font-semibold text-(--text-primary)">
+              {current.code}
+            </h2>
+
+            <p className="mt-2 text-sm text-(--text-secondary)">
+              {unitLabel(current.unit)} · {employeeName}
+            </p>
+          </div>
+
+          <p className="font-mono text-xl tabular-nums text-(--brand)">
+            {formatTime(elapsed)}
+          </p>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              changeState(
+                current,
+                current.status === "PAUSED" ? "resume" : "pause",
+              )
+            }
+            className={secondary}
+          >
+            {current.status === "PAUSED" ? "Retomar" : "Pausar"}
+          </button>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => changeState(current, "defer")}
+            className={secondary}
+          >
+            Deixar para depois
+          </button>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => changeState(current, "finish")}
+            className={primary}
+          >
+            Concluir finalização
+          </button>
+        </section>
+      )}
+
+      {snapshot && !current && (
+        <section className="space-y-5">
+          {confirming ? (
+            <div className={`${panel} space-y-4`}>
+              <h2 className="text-xl font-semibold text-(--text-primary)">
+                Confirmar finalização
+              </h2>
+
+              <dl className="space-y-3 text-sm text-(--text-primary)">
+                <div>
+                  <dt className="text-(--text-secondary)">Código</dt>
+                  <dd className="text-xl font-semibold">{code.trim()}</dd>
+                </div>
+                <div>
+                  <dt className="text-(--text-secondary)">Parte</dt>
+                  <dd>{unitLabel(unit)}</dd>
+                </div>
+                <div>
+                  <dt className="text-(--text-secondary)">Funcionário</dt>
+                  <dd>{employeeName}</dd>
+                </div>
+              </dl>
+
+              <button
+                type="button"
+                onClick={start}
+                disabled={busy}
+                className={primary}
+              >
+                {busy ? "Salvando…" : "Confirmar e iniciar"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={busy}
+                className={secondary}
+              >
+                Voltar e corrigir
+              </button>
+            </div>
+          ) : (
+            <>
+              <fieldset disabled={busy} className="space-y-3">
+                <legend className="text-sm font-medium text-(--text-primary)">
+                  Tipo de finalização
+                </legend>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {options.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={unit === option.value}
+                      onClick={() => setUnit(option.value)}
+                      className={`rounded-2xl border p-4 font-semibold text-(--text-primary) disabled:opacity-50 ${
+                        unit === option.value
+                          ? "border-(--brand) bg-(--brand-soft)"
+                          : "border-(--border) bg-(--surface-soft)"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <CameraScanner
+                  onDetected={(value) => {
+                    setCode(value.trim());
+                    setError("");
+                    setMessage("");
+                  }}
+                />
+
+                <label
+                  htmlFor="finalization-code"
+                  className="block text-sm font-medium text-(--text-primary)"
+                >
+                  Código do tênis
+                </label>
+
+                <input
+                  id="finalization-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={64}
+                  value={code}
+                  onChange={(event) => {
+                    setCode(event.target.value);
+                    setError("");
+                    setMessage("");
+                  }}
+                  placeholder="Ex.: 1001693"
+                  className="auth-input"
+                />
+
+                {code && !validCode && (
+                  <p className="text-sm text-(--text-secondary)">
+                    Informe somente números, com até 64 dígitos.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  disabled={busy || !validCode}
+                  onClick={() => {
+                    setError("");
+                    setMessage("");
+                    setConfirming(true);
+                  }}
+                  className={primary}
+                >
+                  Conferir dados
+                </button>
+              </fieldset>
+            </>
+          )}
+        </section>
+      )}
+
+      {snapshot && snapshot.overview.deferred.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-semibold text-(--text-primary)">
+            Para continuar depois
+          </h2>
+
+          {snapshot.overview.deferred.map((production) => (
+            <div key={production.id} className={`${panel} space-y-3`}>
+              <p className="font-semibold text-(--text-primary)">
+                {production.code} · {unitLabel(production.unit)}
+              </p>
+
+              <p className="text-sm text-(--text-secondary)">
+                Tempo trabalhado: {formatTime(production.elapsedMilliseconds)}
+              </p>
+
+              <button
+                type="button"
+                disabled={busy || Boolean(current)}
+                onClick={() => changeState(production, "continue")}
+                className={secondary}
+              >
+                Continuar este serviço
+              </button>
+            </div>
+          ))}
+
+          {current && (
+            <p className="text-sm text-(--text-secondary)">
+              Conclua ou deixe o serviço atual para depois antes de continuar outro.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }
