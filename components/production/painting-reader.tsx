@@ -1,237 +1,433 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { ActiveProduction } from "@/components/production/active-production";
 import { CameraScanner } from "@/components/production/camera-scanner";
 
-type ProductionKind = "STANDARD" | "RETURN";
+import type {
+  PaintingAction,
+  PaintingOverview,
+  PaintingProductionView,
+} from "@/services/painting.service";
 
 type PaintingReaderProps = {
   employeeName: string;
+  initialOverview: PaintingOverview;
 };
+
+type ApiError = {
+  error?: {
+    message?: string;
+  };
+};
+
+function formatDuration(milliseconds: number) {
+  const seconds = Math.floor(Math.max(0, milliseconds) / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0",
+  )}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function ProductionTimer({
+  production,
+}: {
+  production: PaintingProductionView;
+}) {
+  const [extraMilliseconds, setExtraMilliseconds] = useState(0);
+
+  useEffect(() => {
+    if (production.status !== "IN_PROGRESS") return;
+
+    const baseline = performance.now();
+
+    const interval = window.setInterval(() => {
+      setExtraMilliseconds(performance.now() - baseline);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [production.status]);
+
+  return (
+    <span className="font-mono text-lg font-semibold text-(--brand)">
+      {formatDuration(
+        production.elapsedMilliseconds +
+          (production.status === "IN_PROGRESS" ? extraMilliseconds : 0),
+      )}
+    </span>
+  );
+}
 
 export function PaintingReader({
   employeeName,
+  initialOverview,
 }: PaintingReaderProps) {
+  const [overview, setOverview] = useState(initialOverview);
   const [code, setCode] = useState("");
-  const [kind, setKind] = useState<ProductionKind>("STANDARD");
-  const [returnReason, setReturnReason] = useState("");
   const [confirming, setConfirming] = useState(false);
-  const [active, setActive] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const isReturn = kind === "RETURN";
+  const requestInProgress = useRef(false);
 
-  function handleDetected(detectedCode: string) {
-    setCode(detectedCode);
-  }
+  const current = overview.current;
+  const validCode = /^\d{1,64}$/.test(code);
 
-  function handleCodeChange(value: string) {
-    const sanitized = value.replace(/\D/g, "").slice(0, 10);
+  async function fetchOverview() {
+    const response = await fetch("/api/production/painting", {
+      cache: "no-store",
+    });
 
-    setCode(sanitized);
-  }
-
-  function handleContinue() {
-    if (code.length < 4) {
-      return;
+    if (!response.ok) {
+      throw new Error("Não foi possível atualizar a produção.");
     }
 
-    if (isReturn && !returnReason.trim()) {
-      return;
+    const updated = (await response.json()) as PaintingOverview;
+    setOverview(updated);
+  }
+
+  async function refresh() {
+    if (requestInProgress.current) return;
+
+    requestInProgress.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      await fetchOverview();
+    } catch {
+      setError(
+        "Não foi possível atualizar. Verifique a conexão e tente novamente.",
+      );
+    } finally {
+      requestInProgress.current = false;
+      setBusy(false);
     }
-
-    setConfirming(true);
   }
 
-  function handleBack() {
-    setConfirming(false);
+  async function send(
+    method: "POST" | "PATCH",
+    body: Record<string, unknown>,
+    successMessage: string,
+  ) {
+    if (requestInProgress.current) return;
+
+    requestInProgress.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/production/painting", {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const payload = (await response
+          .json()
+          .catch(() => null)) as ApiError | null;
+
+        setError(
+          payload?.error?.message ?? "Não foi possível concluir a operação.",
+        );
+
+        // Recupera o estado atual se outra tela alterou a produção.
+        try {
+          await fetchOverview();
+        } catch {
+          // Mantém o erro original e permite atualização manual.
+        }
+
+        return;
+      }
+
+      const updated = (await response.json()) as PaintingOverview;
+
+      setOverview(updated);
+      setCode("");
+      setConfirming(false);
+      setNotice(successMessage);
+    } catch {
+      setError(
+        "Não foi possível confirmar o resultado. Clique em Atualizar produção antes de tentar novamente.",
+      );
+    } finally {
+      requestInProgress.current = false;
+      setBusy(false);
+    }
   }
 
-  function handleFinish() {
-    setActive(false);
-    setConfirming(false);
-    setCode("");
-    setReturnReason("");
-    setKind("STANDARD");
-  }
+  function startProduction() {
+    if (!validCode) return;
 
-  if (active) {
-    return (
-      <ActiveProduction
-        code={code}
-        processName="Pintura"
-        employeeName={employeeName}
-        productionType={isReturn ? "Retorno" : "Produção normal"}
-        onFinish={handleFinish}
-      />
+    void send(
+      "POST",
+      {
+        code,
+        kind: "STANDARD",
+        unit: "PAIR",
+      },
+      "Pintura iniciada e salva.",
     );
   }
 
-  if (confirming) {
-    return (
-      <div className="space-y-6">
-        <section className="rounded-[28px] border border-(--border) bg-(--surface-soft) p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-(--brand)">
-            Confirmar produção
-          </p>
+  function changeState(
+    production: PaintingProductionView,
+    action: PaintingAction,
+  ) {
+    const messages: Record<PaintingAction, string> = {
+      pause: "Pintura pausada para banheiro.",
+      resume: "Pintura retomada após pausa banheiro.",
+      defer: "Pintura salva para continuar depois.",
+      continue: "Pintura retomada como continuação.",
+      finish: "Pintura concluída e comissão registrada.",
+    };
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                Código
-              </p>
-
-              <p className="mt-1 text-xl font-semibold text-(--text-primary)">
-                {code}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                Processo
-              </p>
-
-              <p className="mt-1 font-semibold text-(--text-primary)">
-                Pintura
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                Tipo
-              </p>
-
-              <p className="mt-1 font-semibold text-(--text-primary)">
-                {isReturn ? "Retorno" : "Produção normal"}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-(--border) bg-(--surface) p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                Funcionário
-              </p>
-
-              <p className="mt-1 font-semibold text-(--text-primary)">
-                {employeeName}
-              </p>
-            </div>
-          </div>
-
-          {isReturn && (
-            <div className="mt-3 rounded-2xl border border-(--border) bg-(--surface) p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-(--text-muted)">
-                Motivo do retorno
-              </p>
-
-              <p className="mt-1 text-sm text-(--text-primary)">
-                {returnReason}
-              </p>
-            </div>
-          )}
-        </section>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="w-full rounded-2xl border border-(--border-strong) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover)"
-          >
-            Voltar e corrigir
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setConfirming(false);
-              setActive(true);
-            }}
-            className="w-full rounded-2xl bg-(--brand) px-4 py-3.5 font-semibold text-white transition hover:bg-(--brand-hover)"
-          >
-            Confirmar e iniciar
-          </button>
-        </div>
-      </div>
+    void send(
+      "PATCH",
+      {
+        productionId: production.id,
+        version: production.version,
+        action,
+      },
+      messages[action],
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="mb-3 text-sm font-medium text-(--text-secondary)">
-          Tipo
+      {error && (
+        <p
+          role="alert"
+          className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-(--text-primary)"
+        >
+          {error}
         </p>
+      )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setKind("STANDARD")}
-            className={`rounded-2xl border px-4 py-4 text-left font-semibold transition ${
-              kind === "STANDARD"
-                ? "border-(--brand) bg-(--brand-soft) text-(--text-primary)"
-                : "border-(--border) bg-(--surface-soft) text-(--text-secondary) hover:bg-(--surface-hover)"
-            }`}
-          >
-            Produção normal
-          </button>
+      {notice && (
+        <p
+          role="status"
+          className="rounded-xl bg-(--brand-soft) p-4 text-sm text-(--text-primary)"
+        >
+          {notice}
+        </p>
+      )}
 
-          <button
-            type="button"
-            onClick={() => setKind("RETURN")}
-            className={`rounded-2xl border px-4 py-4 text-left font-semibold transition ${
-              kind === "RETURN"
-                ? "border-(--brand) bg-(--brand-soft) text-(--text-primary)"
-                : "border-(--border) bg-(--surface-soft) text-(--text-secondary) hover:bg-(--surface-hover)"
-            }`}
-          >
-            Retorno
-          </button>
-        </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={busy}
+          className="text-sm font-semibold text-(--brand) disabled:opacity-50"
+        >
+          {busy ? "Aguarde..." : "Atualizar produção"}
+        </button>
       </div>
 
-      {isReturn && (
-        <div>
-          <label className="text-sm font-medium text-(--text-secondary)">
-            Motivo do retorno
-          </label>
+      {current ? (
+        <section className="rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-(--text-secondary)">
+                Pintura · Par completo
+              </p>
 
-          <textarea
-            value={returnReason}
-            onChange={(event) => setReturnReason(event.target.value)}
-            rows={3}
-            className="auth-input resize-none"
+              <h2 className="mt-2 text-2xl font-semibold text-(--text-primary)">
+                {current.code}
+              </h2>
+
+              <p className="mt-2 text-sm text-(--text-secondary)">
+                {employeeName} ·{" "}
+                {current.status === "PAUSED" ? "Pausada" : "Em andamento"}
+              </p>
+            </div>
+
+            <ProductionTimer
+              key={`${current.id}-${current.version}-${current.observedAt}`}
+              production={current}
+            />
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                changeState(
+                  current,
+                  current.status === "PAUSED" ? "resume" : "pause",
+                )
+              }
+              className="rounded-xl border border-(--border-strong) px-4 py-3 font-semibold text-(--text-primary) disabled:opacity-50"
+            >
+                            {current.status === "PAUSED"
+                ? "Voltei do banheiro"
+                : "Pausa banheiro"}
+            </button>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => changeState(current, "defer")}
+              className="rounded-xl border border-(--border-strong) px-4 py-3 font-semibold text-(--text-primary) disabled:opacity-50"
+            >
+              Deixar para depois
+            </button>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => changeState(current, "finish")}
+              className="primary-button w-full disabled:opacity-50 sm:col-span-2"
+            >
+              Concluir pintura
+            </button>
+          </div>
+        </section>
+      ) : confirming ? (
+        <section className="rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
+          <h2 className="text-xl font-semibold text-(--text-primary)">
+            Confirmar pintura
+          </h2>
+
+          <dl className="mt-5 space-y-3 text-sm">
+            <div>
+              <dt className="text-(--text-secondary)">Código</dt>
+              <dd className="font-semibold text-(--text-primary)">{code}</dd>
+            </div>
+
+            <div>
+              <dt className="text-(--text-secondary)">Funcionário</dt>
+              <dd className="text-(--text-primary)">{employeeName}</dd>
+            </div>
+
+            <div>
+              <dt className="text-(--text-secondary)">Serviço</dt>
+              <dd className="text-(--text-primary)">
+                Pintura normal · Par completo
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirming(false)}
+              className="rounded-xl border border-(--border-strong) px-4 py-3 font-semibold text-(--text-primary) disabled:opacity-50"
+            >
+              Voltar e corrigir
+            </button>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={startProduction}
+              className="primary-button w-full disabled:opacity-50"
+            >
+              {busy ? "Salvando..." : "Confirmar e iniciar"}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <div className="space-y-5">
+          <CameraScanner
+            onDetected={(detectedCode) => {
+              setCode(detectedCode.trim());
+              setError("");
+              setNotice("");
+            }}
           />
+
+          <div>
+            <label
+              htmlFor="painting-code"
+              className="text-sm font-medium text-(--text-secondary)"
+            >
+              Código manual
+            </label>
+
+            <input
+              id="painting-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={64}
+              value={code}
+              disabled={busy}
+              onChange={(event) =>
+                setCode(event.target.value.replace(/\D/g, "").slice(0, 64))
+              }
+              className="auth-input"
+            />
+          </div>
+
+          <button
+            type="button"
+            disabled={busy || !validCode}
+            onClick={() => {
+              setError("");
+              setNotice("");
+              setConfirming(true);
+            }}
+            className="primary-button w-full disabled:opacity-50"
+          >
+            Conferir e iniciar
+          </button>
         </div>
       )}
 
-      <CameraScanner onDetected={handleDetected} />
+      {overview.deferred.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-(--text-primary)">
+            Pinturas para continuar
+          </h2>
 
-      <div>
-        <label
-          htmlFor="painting-code"
-          className="text-sm font-medium text-(--text-secondary)"
-        >
-          Código manual
-        </label>
+          {overview.deferred.map((production) => (
+            <article
+              key={production.id}
+              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-(--border) bg-(--surface-soft) p-4"
+            >
+              <div>
+                <p className="font-semibold text-(--text-primary)">
+                  {production.code}
+                </p>
+                <p className="mt-1 text-sm text-(--text-secondary)">
+                  Tempo trabalhado:{" "}
+                  {formatDuration(production.elapsedMilliseconds)}
+                </p>
+              </div>
 
-        <input
-          id="painting-code"
-          type="text"
-          inputMode="numeric"
-          value={code}
-          onChange={(event) => handleCodeChange(event.target.value)}
-          className="auth-input"
-        />
-      </div>
+              <button
+                type="button"
+                disabled={busy || current !== null}
+                onClick={() => changeState(production, "continue")}
+                className="rounded-xl bg-(--brand) px-4 py-3 font-semibold text-white disabled:opacity-50"
+              >
+                Continuar pintura
+              </button>
+            </article>
+          ))}
 
-      <button
-        type="button"
-        onClick={handleContinue}
-        disabled={code.length < 4 || (isReturn && !returnReason.trim())}
-        className="primary-button w-full"
-      >
-        Continuar
-      </button>
+          {current && (
+            <p className="text-sm text-(--text-secondary)">
+              Conclua ou deixe a pintura atual para depois antes de
+              continuar outra.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

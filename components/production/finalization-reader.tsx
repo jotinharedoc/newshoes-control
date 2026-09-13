@@ -202,7 +202,7 @@ export function FinalizationReader({ employeeName }: Props) {
 
       const messages: Record<Action, string> = {
         pause: "Produção pausada. O tempo da pausa não será contado.",
-        resume: "Produção retomada.",
+        resume: "Produção retomada após pausa banheiro.",
         defer: "Produção salva para continuar depois.",
         continue: "Continuação iniciada no mesmo registro.",
         finish: "Finalização concluída e comissão registrada.",
@@ -290,7 +290,7 @@ export function FinalizationReader({ employeeName }: Props) {
             }
             className={secondary}
           >
-            {current.status === "PAUSED" ? "Retomar" : "Pausar"}
+            {current.status === "PAUSED" ? "Voltei do banheiro" : "Pausa banheiro"}
           </button>
 
           <button

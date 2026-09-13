@@ -44,6 +44,7 @@ enum SessionEndReason {
 
 enum EmployeeBreakKind {
   LUNCH
+  BATHROOM
 }
 
 model Role {

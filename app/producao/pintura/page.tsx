@@ -1,10 +1,33 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { PaintingReader } from "@/components/production/painting-reader";
 import { requirePageAccess } from "@/lib/auth-page";
+import {
+  getPaintingOverview,
+  type PaintingOverview,
+} from "@/services/painting.service";
+import { ProductionError } from "@/types/production-error.types";
+
+export const dynamic = "force-dynamic";
 
 export default async function PaintingPage() {
   const employee = await requirePageAccess();
+
+  let initialOverview: PaintingOverview;
+
+  try {
+    initialOverview = await getPaintingOverview(employee.id);
+  } catch (error) {
+    if (
+      error instanceof ProductionError &&
+      error.code === "PROCESS_NOT_AUTHORIZED"
+    ) {
+      redirect("/producao");
+    }
+
+    throw error;
+  }
 
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
@@ -23,22 +46,24 @@ export default async function PaintingPage() {
         </div>
 
         <section className="rounded-[28px] border border-(--border) bg-(--surface) p-6 sm:p-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-(--brand)">
-              Produção
-            </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-(--brand)">
+            Produção
+          </p>
 
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-(--text-primary)">
-              Pintura
-            </h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-(--text-primary)">
+            Pintura
+          </h1>
 
-            <p className="mt-3 text-sm leading-6 text-(--text-secondary)">
-              Leia o código da etiqueta pela câmera ou informe manualmente.
-            </p>
-          </div>
+          <p className="mt-3 text-sm leading-6 text-(--text-secondary)">
+            Leia o código da etiqueta pela câmera ou informe manualmente.
+            A pintura é registrada por par completo.
+          </p>
 
           <div className="mt-8">
-            <PaintingReader employeeName={employee.name} />
+            <PaintingReader
+              employeeName={employee.name}
+              initialOverview={initialOverview}
+            />
           </div>
         </section>
       </div>

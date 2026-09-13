@@ -1,20 +1,19 @@
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
-import {
+  import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+    import {
   Prisma,
   ProductionStatus,
   SessionEndReason,
   SessionKind,
-  WorkUnit,
 } from "@/lib/generated/prisma/client";
 
 import {
-  createFinalizationProduction,
-  findFinalizationAccess,
-  findFinalizationForAction,
-  findFinalizationProductions,
-  findStandardFinalizationsForShoe,
-  type FinalizationRecord,
-} from "@/repositories/finalization.repository";
+  createPaintingProduction,
+  findPaintingAccess,
+  findPaintingForAction,
+  findPaintingProductions,
+  findStandardPaintingForShoe,
+  type PaintingRecord,
+} from "@/repositories/painting.repository";
 
 import {
   closeOpenWorkSession,
@@ -28,39 +27,39 @@ import {
 
 import { ProductionError } from "@/types/production-error.types";
 
-export type FinalizationAction =
+export type PaintingAction =
   | "pause"
   | "resume"
   | "defer"
   | "continue"
   | "finish";
 
-export type FinalizationProductionView = {
+export type PaintingProductionView = {
   id: string;
   code: string;
   processName: string;
-  unit: WorkUnit;
   status: ProductionStatus;
   version: number;
   elapsedMilliseconds: number;
   observedAt: string;
 };
 
-export type FinalizationOverview = {
-  current: FinalizationProductionView | null;
-  deferred: FinalizationProductionView[];
+export type PaintingOverview = {
+  current: PaintingProductionView | null;
+  deferred: PaintingProductionView[];
 };
 
-async function requireFinalizationAccess(
+
+async function requirePaintingAccess(
   employeeId: string,
   database?: Prisma.TransactionClient,
 ) {
-  const access = await findFinalizationAccess(employeeId, database);
+  const access = await findPaintingAccess(employeeId, database);
 
   if (!access) {
     throw new ProductionError(
       "PROCESS_NOT_AUTHORIZED",
-      "Você não está autorizado a realizar Finalização.",
+      "Você não está autorizado a realizar Pintura.",
       403,
     );
   }
@@ -69,9 +68,9 @@ async function requireFinalizationAccess(
 }
 
 function toView(
-  production: FinalizationRecord,
+  production: PaintingRecord,
   observedAt: Date,
-): FinalizationProductionView {
+): PaintingProductionView {
   const elapsedMilliseconds = production.sessions.reduce(
     (total, session) => {
       const end = session.endedAt ?? observedAt;
@@ -88,7 +87,6 @@ function toView(
     id: production.id,
     code: production.shoe.code,
     processName: production.processType.name,
-    unit: production.unit,
     status: production.status,
     version: production.version,
     elapsedMilliseconds,
@@ -111,12 +109,12 @@ function handleDatabaseError(error: unknown): never {
   throw error;
 }
 
-export async function getFinalizationOverview(
+export async function getPaintingOverview(
   employeeId: string,
-): Promise<FinalizationOverview> {
-  const process = await requireFinalizationAccess(employeeId);
+): Promise<PaintingOverview> {
+  const process = await requirePaintingAccess(employeeId);
 
-  const productions = await findFinalizationProductions(
+  const productions = await findPaintingProductions(
     employeeId,
     process.id,
   );
@@ -140,11 +138,18 @@ export async function getFinalizationOverview(
   };
 }
 
-export async function startFinalizationProduction(
+export async function startPaintingProduction(
   employeeId: string,
   shoeCode: string,
-  unit: WorkUnit,
 ) {
+  if (typeof shoeCode !== "string") {
+    throw new ProductionError(
+      "INVALID_INPUT",
+      "Informe o código do tênis.",
+      400,
+    );
+  }
+
   const code = shoeCode.trim();
 
   if (!/^\d{1,64}$/.test(code)) {
@@ -155,42 +160,26 @@ export async function startFinalizationProduction(
     );
   }
 
-  if (!Object.values(WorkUnit).includes(unit)) {
-    throw new ProductionError(
-      "INVALID_INPUT",
-      "Selecione par completo, pé esquerdo ou pé direito.",
-      400,
-    );
-  }
-
   try {
     await runProductionTransaction(async (database) => {
             await assertNoOpenEmployeeBreak(employeeId, database);
-      const process = await requireFinalizationAccess(
+      const process = await requirePaintingAccess(
         employeeId,
         database,
       );
 
-      const rule = process.rules.find(
-        (entry) => entry.unit === unit,
-      );
+      const rule = process.rules[0];
 
       if (!rule) {
         throw new ProductionError(
           "PROCESS_UNAVAILABLE",
-          "Não existe uma comissão ativa para essa parte do tênis.",
+          "A Pintura não possui uma comissão ativa para par completo.",
           409,
         );
       }
 
       if (await findBlockingProduction(employeeId, database)) {
-           await assertNoOpenEmployeeBreak(employeeId, database); {
-      throw new ProductionError(
-        "INVALID_PRODUCTION_STATE",
-        "Encerre o almoço antes de iniciar ou retomar um trabalho.",
-        409,
-      );
-    }
+             await assertNoOpenEmployeeBreak(employeeId, database);
         throw new ProductionError(
           "ACTIVE_PRODUCTION_EXISTS",
           "Finalize ou deixe a produção atual para depois antes de iniciar outra.",
@@ -200,33 +189,25 @@ export async function startFinalizationProduction(
 
       const shoe = await upsertShoe(code, database);
 
-      const existing = await findStandardFinalizationsForShoe(
+      const existing = await findStandardPaintingForShoe(
         shoe.id,
         process.id,
         database,
       );
 
-      const hasConflict = existing.some(
-        (production) =>
-          unit === WorkUnit.PAIR ||
-          production.unit === WorkUnit.PAIR ||
-          production.unit === unit,
-      );
-
-      if (hasConflict) {
+      if (existing) {
         throw new ProductionError(
           "SHOE_ALREADY_PROCESSED",
-          "Essa parte já possui uma finalização registrada. Se estiver pendente, continue o registro existente.",
+          "Este código já possui uma pintura registrada. Se estiver pendente, retome o registro existente.",
           409,
         );
       }
 
-      await createFinalizationProduction(
+      await createPaintingProduction(
         {
           employeeId,
           processTypeId: process.id,
           shoeId: shoe.id,
-          unit,
           commissionAmountSnapshot: rule.commissionAmount,
           now: new Date(),
         },
@@ -237,16 +218,16 @@ export async function startFinalizationProduction(
     handleDatabaseError(error);
   }
 
-  return getFinalizationOverview(employeeId);
+  return getPaintingOverview(employeeId);
 }
 
-export async function changeFinalizationProductionState(
+export async function changePaintingProductionState(
   employeeId: string,
   productionId: string,
   version: number,
-  action: FinalizationAction,
+  action: PaintingAction,
 ) {
-  const actions: FinalizationAction[] = [
+  const actions: PaintingAction[] = [
     "pause",
     "resume",
     "defer",
@@ -255,7 +236,8 @@ export async function changeFinalizationProductionState(
   ];
 
   if (
-    !productionId ||
+    typeof productionId !== "string" ||
+    !productionId.trim() ||
     !Number.isInteger(version) ||
     version < 0 ||
     !actions.includes(action)
@@ -269,12 +251,12 @@ export async function changeFinalizationProductionState(
 
   try {
     await runProductionTransaction(async (database) => {
-      const process = await requireFinalizationAccess(
+      const process = await requirePaintingAccess(
         employeeId,
         database,
       );
 
-      const production = await findFinalizationForAction(
+      const production = await findPaintingForAction(
         productionId,
         employeeId,
         process.id,
@@ -284,7 +266,7 @@ export async function changeFinalizationProductionState(
       if (!production) {
         throw new ProductionError(
           "PRODUCTION_NOT_FOUND",
-          "A finalização não foi encontrada.",
+          "A pintura não foi encontrada.",
           404,
         );
       }
@@ -298,12 +280,13 @@ export async function changeFinalizationProductionState(
       }
 
       const now = new Date();
+      const originalStatus = production.status;
 
       async function transition(
         allowed: ProductionStatus[],
         status: ProductionStatus,
       ) {
-        if (!allowed.includes(production!.status)) {
+        if (!allowed.includes(originalStatus)) {
           throw new ProductionError(
             "INVALID_PRODUCTION_STATE",
             "Essa ação não é permitida no estado atual da produção.",
@@ -373,6 +356,21 @@ export async function changeFinalizationProductionState(
           );
         }
 
+        const previousSession =
+          production.sessions[production.sessions.length - 1];
+
+        if (
+          !previousSession ||
+          !previousSession.endedAt ||
+          production.sessions.some((session) => !session.endedAt)
+        ) {
+          throw new ProductionError(
+            "PRODUCTION_CONFLICT",
+            "As sessões desta produção estão inconsistentes. Atualize e tente novamente.",
+            409,
+          );
+        }
+
         await transition(
           [
             action === "resume"
@@ -382,25 +380,13 @@ export async function changeFinalizationProductionState(
           ProductionStatus.IN_PROGRESS,
         );
 
-                const previousSession =
-          production.sessions[production.sessions.length - 1];
-
-        if (!previousSession || !previousSession.endedAt) {
-          throw new ProductionError(
-            "PRODUCTION_CONFLICT",
-            "Não foi encontrada uma sessão encerrada para retomar esta produção.",
-            409,
-          );
-        }
-
-                       const sessionKind =
-          action === "resume"
-            ? SessionKind.RESUME
-            : SessionKind.CONTINUATION;
-
+                // Voltar da pausa banheiro não conta continuação.
+        // Retomar um trabalho deixado para depois conta continuação.
         await createWorkSession(
           productionId,
-          sessionKind,
+          action === "resume"
+            ? SessionKind.RESUME
+            : SessionKind.CONTINUATION,
           now,
           database,
         );
@@ -414,7 +400,7 @@ export async function changeFinalizationProductionState(
           ProductionStatus.DEFERRED,
         );
 
-        if (production.status === ProductionStatus.IN_PROGRESS) {
+        if (originalStatus === ProductionStatus.IN_PROGRESS) {
           await closeSession(SessionEndReason.DEFERRED);
         }
 
@@ -426,10 +412,12 @@ export async function changeFinalizationProductionState(
         ProductionStatus.COMPLETED,
       );
 
-      if (production.status === ProductionStatus.IN_PROGRESS) {
+      if (originalStatus === ProductionStatus.IN_PROGRESS) {
         await closeSession(SessionEndReason.MANUAL_COMPLETION);
       }
 
+      // Usa o valor salvo no início da produção.
+      // A conclusão e a comissão são gravadas na mesma transação.
       await createCommissionEntry(
         productionId,
         production.commissionAmountSnapshot,
@@ -441,5 +429,5 @@ export async function changeFinalizationProductionState(
     handleDatabaseError(error);
   }
 
-  return getFinalizationOverview(employeeId);
+  return getPaintingOverview(employeeId);
 }

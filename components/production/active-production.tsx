@@ -23,8 +23,6 @@ export function ActiveProduction({
   elapsedTime,
   paused = false,
   pending = false,
-  onPause,
-  onResume,
   onDefer,
   onFinish,
   onStartNext,
@@ -67,11 +65,6 @@ export function ActiveProduction({
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {(onPause || onResume) && (
-          <button type="button" onClick={paused ? onResume : onPause} disabled={pending} className="w-full rounded-2xl border border-(--border-strong) bg-(--surface-soft) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover) disabled:opacity-50">
-            {paused ? "Continuar agora" : "Pausar"}
-          </button>
-        )}
         {onDefer && (
           <button type="button" onClick={onDefer} disabled={pending} className="w-full rounded-2xl border border-(--border-strong) bg-(--surface-soft) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover) disabled:opacity-50">
             Deixar para depois

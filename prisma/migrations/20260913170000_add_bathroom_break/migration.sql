@@ -1,0 +1,1 @@
+ALTER TYPE "EmployeeBreakKind" ADD VALUE 'BATHROOM';

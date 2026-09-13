@@ -153,7 +153,7 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
                   <p className="mt-1 font-mono text-sm tabular-nums text-(--text-secondary)">{formatDuration(production.elapsedMilliseconds)}</p>
                 </div>
                 <button type="button" onClick={() => void runAction(production, "continue")} disabled={pending} className="rounded-xl bg-(--brand) px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
-                  Retomar
+                  Continuar trabalho
                 </button>
               </div>
             ))}

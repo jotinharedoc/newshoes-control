@@ -1,3 +1,4 @@
+import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import {
   Prisma,
   ProductionStatus,
@@ -174,7 +175,8 @@ export async function startHygieneProduction(
 
   try {
     await runProductionTransaction(async (database) => {
-      if (await findBlockingProduction(employeeId, database)) {
+      if (await findBlockingProduction(employeeId, database))
+              await assertNoOpenEmployeeBreak(employeeId, database);{
         throw new ProductionError(
           "ACTIVE_PRODUCTION_EXISTS",
           "Pause ou deixe a produção atual para depois antes de iniciar outra.",
@@ -183,6 +185,7 @@ export async function startHygieneProduction(
       }
 
       await createProductionInsideTransaction(employeeId, code, database);
+            await assertNoOpenEmployeeBreak(employeeId, database);
     });
   } catch (error) {
     mapDatabaseConflict(error);
@@ -197,6 +200,7 @@ async function requireProductionForAction(
   database: Prisma.TransactionClient,
 ) {
   await requireHygieneAccess(employeeId, database);
+        await assertNoOpenEmployeeBreak(employeeId, database);
   const production = await findHygieneProductionForAction(
     productionId,
     employeeId,
@@ -313,9 +317,25 @@ export async function changeHygieneProductionState(
             database,
           ),
         );
+                const previousSession =
+          production.sessions[production.sessions.length - 1];
+
+        if (!previousSession || !previousSession.endedAt) {
+          throw new ProductionError(
+            "PRODUCTION_CONFLICT",
+            "Não foi encontrada uma sessão encerrada para retomar esta produção.",
+            409,
+          );
+        }
+
+                       const sessionKind =
+          action === "resume"
+            ? SessionKind.RESUME
+            : SessionKind.CONTINUATION;
+
         await createWorkSession(
           production.id,
-          action === "resume" ? SessionKind.RESUME : SessionKind.CONTINUATION,
+          sessionKind,
           now,
           database,
         );
