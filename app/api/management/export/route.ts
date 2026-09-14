@@ -35,6 +35,7 @@ const labels: Record<string, string> = {
   CONTINUATION: "Continuação",
   PAUSE: "Pausa",
   LUNCH: "Almoço",
+  BATHROOM: "Banheiro",
   SHIFT_END: "Fim do turno",
   NEXT_QR_SCAN: "Leitura do próximo código",
   MANUAL_COMPLETION: "Conclusão manual",
@@ -204,8 +205,10 @@ export async function GET(request: Request) {
         "Trabalho retomado após almoço ou deixado para depois. Pausa banheiro não conta continuação.",
       ],
       ["Sessões", "Histórico das produções selecionadas; tempo contabilizado só dentro do período."],
-      ["Almoço", "Segue o funcionário e o período, independentemente do filtro de processo."],
-      ["Total de almoço (segundos)", data.totalBreakMs / 1000],
+      ["Intervalos", "Banheiro e almoço seguem o funcionário e o período, independentemente do filtro de processo."],
+      ["Total de banheiro (segundos)", data.totalBathroomMs / 1000],
+      ["Total de almoço (segundos)", data.totalLunchMs / 1000],
+      ["Total de intervalos (segundos)", data.totalBreakMs / 1000],
     ],
   );
 

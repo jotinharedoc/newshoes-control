@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, mock, test } from "node:test";
+import { afterEach, beforeEach, mock, test } from "node:test";
 
 import {
   Prisma,
@@ -84,6 +84,9 @@ function productionRecord(): TestProduction {
 }
 
 afterEach(() => mock.restoreAll());
+beforeEach(() => {
+  mock.method(prisma.employeeBreak, "findFirst", async () => null);
+});
 
 test("início valida autorização e salva comissão e sessão inicial", async () => {
   const record = productionRecord();

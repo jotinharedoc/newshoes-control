@@ -175,8 +175,8 @@ export async function startHygieneProduction(
 
   try {
     await runProductionTransaction(async (database) => {
-      if (await findBlockingProduction(employeeId, database))
-              await assertNoOpenEmployeeBreak(employeeId, database);{
+      await assertNoOpenEmployeeBreak(employeeId, database);
+      if (await findBlockingProduction(employeeId, database)) {
         throw new ProductionError(
           "ACTIVE_PRODUCTION_EXISTS",
           "Pause ou deixe a produção atual para depois antes de iniciar outra.",
@@ -185,7 +185,6 @@ export async function startHygieneProduction(
       }
 
       await createProductionInsideTransaction(employeeId, code, database);
-            await assertNoOpenEmployeeBreak(employeeId, database);
     });
   } catch (error) {
     mapDatabaseConflict(error);
@@ -200,7 +199,7 @@ async function requireProductionForAction(
   database: Prisma.TransactionClient,
 ) {
   await requireHygieneAccess(employeeId, database);
-        await assertNoOpenEmployeeBreak(employeeId, database);
+  await assertNoOpenEmployeeBreak(employeeId, database);
   const production = await findHygieneProductionForAction(
     productionId,
     employeeId,
@@ -481,4 +480,3 @@ export async function finishAndStartNextHygieneProduction(
 
   return getHygieneOverview(employeeId);
 }
-

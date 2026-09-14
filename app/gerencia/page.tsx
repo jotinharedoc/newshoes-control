@@ -515,11 +515,11 @@ export default async function ManagementPage({
 
             <section className={panel}>
               <h2 className="text-lg font-semibold text-(--text-primary)">
-                Intervalos de almoço
+                Intervalos de banheiro e almoço
               </h2>
 
               <p className="mt-2 text-sm text-(--text-secondary)">
-                Total no período: {duration(data.totalBreakMs)}. Estes
+                Banheiro: {duration(data.totalBathroomMs)} · Almoço: {duration(data.totalLunchMs)} · Total: {duration(data.totalBreakMs)}. Estes
                 intervalos seguem o filtro de funcionário, independentemente
                 do processo escolhido.
               </p>
@@ -532,6 +532,7 @@ export default async function ManagementPage({
                   >
                     <span>
                       {item.employeeName} ·{" "}
+                      {item.kind === "BATHROOM" ? "Banheiro" : "Almoço"} ·{" "}
                       {dateFormatter.format(new Date(item.startedAt))}
                       {" → "}
                       {item.endedAt

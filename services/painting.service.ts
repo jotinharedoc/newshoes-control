@@ -1,4 +1,4 @@
-  import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
     import {
   Prisma,
   ProductionStatus,
@@ -162,7 +162,7 @@ export async function startPaintingProduction(
 
   try {
     await runProductionTransaction(async (database) => {
-            await assertNoOpenEmployeeBreak(employeeId, database);
+      await assertNoOpenEmployeeBreak(employeeId, database);
       const process = await requirePaintingAccess(
         employeeId,
         database,
@@ -179,7 +179,6 @@ export async function startPaintingProduction(
       }
 
       if (await findBlockingProduction(employeeId, database)) {
-             await assertNoOpenEmployeeBreak(employeeId, database);
         throw new ProductionError(
           "ACTIVE_PRODUCTION_EXISTS",
           "Finalize ou deixe a produção atual para depois antes de iniciar outra.",
@@ -256,6 +255,7 @@ export async function changePaintingProductionState(
         database,
       );
 
+      await assertNoOpenEmployeeBreak(employeeId, database);
       const production = await findPaintingForAction(
         productionId,
         employeeId,

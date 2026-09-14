@@ -7,7 +7,14 @@ async function unexpectedQuery(args: unknown): Promise<unknown> {
 }
 
 export const prisma = {
+  employeeBreak: {
+    findMany: (args: Prisma.EmployeeBreakFindManyArgs) => unexpectedQuery(args),
+    findFirst: (args: Prisma.EmployeeBreakFindFirstArgs) => unexpectedQuery(args),
+    create: (args: Prisma.EmployeeBreakCreateArgs) => unexpectedQuery(args),
+    updateMany: (args: Prisma.EmployeeBreakUpdateManyArgs) => unexpectedQuery(args),
+  },
   employee: {
+    findMany: (args: Prisma.EmployeeFindManyArgs) => unexpectedQuery(args),
     findFirst: (args: Prisma.EmployeeFindFirstArgs) => unexpectedQuery(args),
     update: (args: Prisma.EmployeeUpdateArgs) => unexpectedQuery(args),
   },
@@ -18,6 +25,9 @@ export const prisma = {
   },
   employeeProcess: {
     findFirst: (args: Prisma.EmployeeProcessFindFirstArgs) => unexpectedQuery(args),
+  },
+  processType: {
+    findMany: (args: Prisma.ProcessTypeFindManyArgs) => unexpectedQuery(args),
   },
   production: {
     findFirst: (args: Prisma.ProductionFindFirstArgs) => unexpectedQuery(args),

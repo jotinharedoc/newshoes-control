@@ -165,7 +165,7 @@ export async function startFinalizationProduction(
 
   try {
     await runProductionTransaction(async (database) => {
-            await assertNoOpenEmployeeBreak(employeeId, database);
+      await assertNoOpenEmployeeBreak(employeeId, database);
       const process = await requireFinalizationAccess(
         employeeId,
         database,
@@ -184,13 +184,6 @@ export async function startFinalizationProduction(
       }
 
       if (await findBlockingProduction(employeeId, database)) {
-           await assertNoOpenEmployeeBreak(employeeId, database); {
-      throw new ProductionError(
-        "INVALID_PRODUCTION_STATE",
-        "Encerre o almoço antes de iniciar ou retomar um trabalho.",
-        409,
-      );
-    }
         throw new ProductionError(
           "ACTIVE_PRODUCTION_EXISTS",
           "Finalize ou deixe a produção atual para depois antes de iniciar outra.",
@@ -273,6 +266,7 @@ export async function changeFinalizationProductionState(
         employeeId,
         database,
       );
+      await assertNoOpenEmployeeBreak(employeeId, database);
 
       const production = await findFinalizationForAction(
         productionId,
