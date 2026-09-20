@@ -1,5 +1,4 @@
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
-    import {
+import {
   Prisma,
   ProductionStatus,
   SessionEndReason,
@@ -19,12 +18,13 @@ import {
   closeOpenWorkSession,
   createCommissionEntry,
   createWorkSession,
-  findBlockingProduction,
   runProductionTransaction,
   transitionProduction,
   upsertShoe,
 } from "@/repositories/production.repository";
 
+import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { ProductionError } from "@/types/production-error.types";
 
 export type PaintingAction =
@@ -48,7 +48,6 @@ export type PaintingOverview = {
   current: PaintingProductionView | null;
   deferred: PaintingProductionView[];
 };
-
 
 async function requirePaintingAccess(
   employeeId: string,
@@ -163,6 +162,7 @@ export async function startPaintingProduction(
   try {
     await runProductionTransaction(async (database) => {
       await assertNoOpenEmployeeBreak(employeeId, database);
+
       const process = await requirePaintingAccess(
         employeeId,
         database,
@@ -174,14 +174,6 @@ export async function startPaintingProduction(
         throw new ProductionError(
           "PROCESS_UNAVAILABLE",
           "A Pintura não possui uma comissão ativa para par completo.",
-          409,
-        );
-      }
-
-      if (await findBlockingProduction(employeeId, database)) {
-        throw new ProductionError(
-          "ACTIVE_PRODUCTION_EXISTS",
-          "Finalize ou deixe a produção atual para depois antes de iniciar outra.",
           409,
         );
       }
@@ -202,13 +194,25 @@ export async function startPaintingProduction(
         );
       }
 
+      const now = new Date();
+
+      // Deixa outros trabalhos do funcionário para depois.
+      // A troca e o início são gravados na mesma transação.
+      await prepareWorkSwitch(
+        {
+          employeeId,
+          now,
+        },
+        database,
+      );
+
       await createPaintingProduction(
         {
           employeeId,
           processTypeId: process.id,
           shoeId: shoe.id,
           commissionAmountSnapshot: rule.commissionAmount,
-          now: new Date(),
+          now,
         },
         database,
       );
@@ -256,6 +260,7 @@ export async function changePaintingProductionState(
       );
 
       await assertNoOpenEmployeeBreak(employeeId, database);
+
       const production = await findPaintingForAction(
         productionId,
         employeeId,
@@ -345,17 +350,6 @@ export async function changePaintingProductionState(
       }
 
       if (action === "resume" || action === "continue") {
-        if (
-          action === "continue" &&
-          (await findBlockingProduction(employeeId, database))
-        ) {
-          throw new ProductionError(
-            "ACTIVE_PRODUCTION_EXISTS",
-            "Finalize ou deixe a produção atual para depois antes de continuar esta.",
-            409,
-          );
-        }
-
         const previousSession =
           production.sessions[production.sessions.length - 1];
 
@@ -371,6 +365,15 @@ export async function changePaintingProductionState(
           );
         }
 
+        await prepareWorkSwitch(
+          {
+            employeeId,
+            targetProductionId: production.id,
+            now,
+          },
+          database,
+        );
+
         await transition(
           [
             action === "resume"
@@ -380,8 +383,8 @@ export async function changePaintingProductionState(
           ProductionStatus.IN_PROGRESS,
         );
 
-                // Voltar da pausa banheiro não conta continuação.
-        // Retomar um trabalho deixado para depois conta continuação.
+        // Voltar da pausa não conta como continuação.
+        // Retomar um trabalho deixado para depois conta.
         await createWorkSession(
           productionId,
           action === "resume"
@@ -417,7 +420,7 @@ export async function changePaintingProductionState(
       }
 
       // Usa o valor salvo no início da produção.
-      // A conclusão e a comissão são gravadas na mesma transação.
+      // Somente a conclusão lança a comissão.
       await createCommissionEntry(
         productionId,
         production.commissionAmountSnapshot,

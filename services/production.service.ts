@@ -1,3 +1,4 @@
+import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import {
   Prisma,
@@ -10,7 +11,6 @@ import {
   createCommissionEntry,
   createHygieneProduction,
   createWorkSession,
-  findBlockingProduction,
   findHygieneAccess,
   findHygieneProductionForAction,
   findHygieneProductions,
@@ -175,16 +175,21 @@ export async function startHygieneProduction(
 
   try {
     await runProductionTransaction(async (database) => {
-      await assertNoOpenEmployeeBreak(employeeId, database);
-      if (await findBlockingProduction(employeeId, database)) {
-        throw new ProductionError(
-          "ACTIVE_PRODUCTION_EXISTS",
-          "Pause ou deixe a produção atual para depois antes de iniciar outra.",
-          409,
-        );
-      }
+      await requireHygieneAccess(employeeId, database);
 
-      await createProductionInsideTransaction(employeeId, code, database);
+      await prepareWorkSwitch(
+        {
+          employeeId,
+          now: new Date(),
+        },
+        database,
+      );
+
+      await createProductionInsideTransaction(
+        employeeId,
+        code,
+        database,
+      );
     });
   } catch (error) {
     mapDatabaseConflict(error);
@@ -296,13 +301,14 @@ export async function changeHygieneProductionState(
           action === "resume" ? ProductionStatus.PAUSED : ProductionStatus.DEFERRED;
         assertStatus(production.status, [expectedStatus]);
 
-        if (action === "continue" && (await findBlockingProduction(employeeId, database))) {
-          throw new ProductionError(
-            "ACTIVE_PRODUCTION_EXISTS",
-            "Finalize ou deixe a produção atual para depois antes de continuar esta.",
-            409,
-          );
-        }
+                await prepareWorkSwitch(
+          {
+            employeeId,
+            targetProductionId: production.id,
+            now,
+          },
+          database,
+        );
 
         await assertTransitionSucceeded(
           await transitionProduction(

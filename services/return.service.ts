@@ -1,4 +1,3 @@
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import {
   ProductionStatus,
   SessionEndReason,
@@ -19,11 +18,12 @@ import {
 
 import {
   closeOpenWorkSession,
-  findBlockingProduction,
   runProductionTransaction,
   transitionProduction,
 } from "@/repositories/production.repository";
 
+import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { ProductionError } from "@/types/production-error.types";
 
 export type ReturnAction =
@@ -71,6 +71,14 @@ export async function getEmployeeReturns(employeeId: string) {
 }
 
 export async function getQualityReturnCandidates(code: string) {
+  if (typeof code !== "string") {
+    throw new ProductionError(
+      "INVALID_INPUT",
+      "Informe o código do tênis.",
+      400,
+    );
+  }
+
   const normalized = code.trim();
 
   if (!/^\d{1,64}$/.test(normalized)) {
@@ -85,10 +93,22 @@ export async function getQualityReturnCandidates(code: string) {
 }
 
 // A API exige permissão de gerência antes de chamar esta função.
+// Solicitar um retorno cria uma pendência, sem interromper o funcionário.
 export async function requestQualityReturn(
   sourceProductionId: string,
   reason: string,
 ) {
+  if (
+    typeof sourceProductionId !== "string" ||
+    typeof reason !== "string"
+  ) {
+    throw new ProductionError(
+      "INVALID_INPUT",
+      "Selecione o serviço original e informe o motivo do retorno.",
+      400,
+    );
+  }
+
   const normalizedReason = reason.trim();
 
   if (
@@ -167,6 +187,7 @@ export async function changeReturnState(
   ];
 
   if (
+    typeof productionId !== "string" ||
     !productionId.trim() ||
     !Number.isInteger(version) ||
     version < 0 ||
@@ -180,7 +201,8 @@ export async function changeReturnState(
   }
 
   await runProductionTransaction(async (database) => {
-           await assertNoOpenEmployeeBreak(employeeId, database);
+    await assertNoOpenEmployeeBreak(employeeId, database);
+
     const record = await findReturnForAction(
       productionId,
       employeeId,
@@ -195,13 +217,13 @@ export async function changeReturnState(
       );
     }
 
-    if (
-      !(await findReturnProcessAccess(
-        employeeId,
-        record.processType.id,
-        database,
-      ))
-    ) {
+    const access = await findReturnProcessAccess(
+      employeeId,
+      record.processType.id,
+      database,
+    );
+
+    if (!access) {
       throw new ProductionError(
         "PROCESS_NOT_AUTHORIZED",
         "Você não está autorizado a executar este processo.",
@@ -289,17 +311,16 @@ export async function changeReturnState(
         );
       }
 
-      // O retorno pausado é o próprio registro bloqueador.
-      if (
-        action === "start" &&
-        (await findBlockingProduction(employeeId, database))
-      ) {
-        throw new ProductionError(
-          "ACTIVE_PRODUCTION_EXISTS",
-          "Conclua ou deixe o trabalho atual para depois antes de iniciar este retorno.",
-          409,
-        );
-      }
+      // A troca acontece somente quando o funcionário
+      // decide iniciar ou retomar este retorno.
+      await prepareWorkSwitch(
+        {
+          employeeId,
+          targetProductionId: record.id,
+          now,
+        },
+        database,
+      );
 
       await transition(
         [
@@ -310,7 +331,10 @@ export async function changeReturnState(
         ProductionStatus.IN_PROGRESS,
       );
 
-           const sessionKind =
+      // Um retorno nunca iniciado começa como INITIAL.
+      // Voltar da pausa usa RESUME.
+      // Voltar de "deixar para depois" usa CONTINUATION.
+      const sessionKind =
         record.sessions.length === 0
           ? SessionKind.INITIAL
           : action === "resume"
@@ -323,6 +347,7 @@ export async function changeReturnState(
         now,
         database,
       );
+
       return;
     }
 
@@ -366,7 +391,7 @@ export async function changeReturnState(
       await closeSession(SessionEndReason.MANUAL_COMPLETION);
     }
 
-    // Retorno não cria CommissionEntry.
+    // Retorno não gera comissão adicional.
     // A comissão do serviço original permanece intacta.
   });
 

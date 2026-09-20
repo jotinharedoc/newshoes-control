@@ -1,4 +1,3 @@
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import {
   Prisma,
   ProductionStatus,
@@ -20,12 +19,13 @@ import {
   closeOpenWorkSession,
   createCommissionEntry,
   createWorkSession,
-  findBlockingProduction,
   runProductionTransaction,
   transitionProduction,
   upsertShoe,
 } from "@/repositories/production.repository";
 
+import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { ProductionError } from "@/types/production-error.types";
 
 export type FinalizationAction =
@@ -145,6 +145,14 @@ export async function startFinalizationProduction(
   shoeCode: string,
   unit: WorkUnit,
 ) {
+  if (typeof shoeCode !== "string") {
+    throw new ProductionError(
+      "INVALID_INPUT",
+      "Informe o código do tênis.",
+      400,
+    );
+  }
+
   const code = shoeCode.trim();
 
   if (!/^\d{1,64}$/.test(code)) {
@@ -166,6 +174,7 @@ export async function startFinalizationProduction(
   try {
     await runProductionTransaction(async (database) => {
       await assertNoOpenEmployeeBreak(employeeId, database);
+
       const process = await requireFinalizationAccess(
         employeeId,
         database,
@@ -179,14 +188,6 @@ export async function startFinalizationProduction(
         throw new ProductionError(
           "PROCESS_UNAVAILABLE",
           "Não existe uma comissão ativa para essa parte do tênis.",
-          409,
-        );
-      }
-
-      if (await findBlockingProduction(employeeId, database)) {
-        throw new ProductionError(
-          "ACTIVE_PRODUCTION_EXISTS",
-          "Finalize ou deixe a produção atual para depois antes de iniciar outra.",
           409,
         );
       }
@@ -214,6 +215,18 @@ export async function startFinalizationProduction(
         );
       }
 
+      const now = new Date();
+
+      // Deixa outros trabalhos do funcionário para depois.
+      // A troca e o início são gravados na mesma transação.
+      await prepareWorkSwitch(
+        {
+          employeeId,
+          now,
+        },
+        database,
+      );
+
       await createFinalizationProduction(
         {
           employeeId,
@@ -221,7 +234,7 @@ export async function startFinalizationProduction(
           shoeId: shoe.id,
           unit,
           commissionAmountSnapshot: rule.commissionAmount,
-          now: new Date(),
+          now,
         },
         database,
       );
@@ -248,7 +261,8 @@ export async function changeFinalizationProductionState(
   ];
 
   if (
-    !productionId ||
+    typeof productionId !== "string" ||
+    !productionId.trim() ||
     !Number.isInteger(version) ||
     version < 0 ||
     !actions.includes(action)
@@ -266,6 +280,7 @@ export async function changeFinalizationProductionState(
         employeeId,
         database,
       );
+
       await assertNoOpenEmployeeBreak(employeeId, database);
 
       const production = await findFinalizationForAction(
@@ -292,12 +307,13 @@ export async function changeFinalizationProductionState(
       }
 
       const now = new Date();
+      const originalStatus = production.status;
 
       async function transition(
         allowed: ProductionStatus[],
         status: ProductionStatus,
       ) {
-        if (!allowed.includes(production!.status)) {
+        if (!allowed.includes(originalStatus)) {
           throw new ProductionError(
             "INVALID_PRODUCTION_STATE",
             "Essa ação não é permitida no estado atual da produção.",
@@ -356,16 +372,29 @@ export async function changeFinalizationProductionState(
       }
 
       if (action === "resume" || action === "continue") {
+        const previousSession =
+          production.sessions[production.sessions.length - 1];
+
         if (
-          action === "continue" &&
-          (await findBlockingProduction(employeeId, database))
+          !previousSession ||
+          !previousSession.endedAt ||
+          production.sessions.some((session) => !session.endedAt)
         ) {
           throw new ProductionError(
-            "ACTIVE_PRODUCTION_EXISTS",
-            "Finalize ou deixe a produção atual para depois antes de continuar esta.",
+            "PRODUCTION_CONFLICT",
+            "As sessões desta produção estão inconsistentes. Atualize e tente novamente.",
             409,
           );
         }
+
+        await prepareWorkSwitch(
+          {
+            employeeId,
+            targetProductionId: production.id,
+            now,
+          },
+          database,
+        );
 
         await transition(
           [
@@ -376,18 +405,9 @@ export async function changeFinalizationProductionState(
           ProductionStatus.IN_PROGRESS,
         );
 
-                const previousSession =
-          production.sessions[production.sessions.length - 1];
-
-        if (!previousSession || !previousSession.endedAt) {
-          throw new ProductionError(
-            "PRODUCTION_CONFLICT",
-            "Não foi encontrada uma sessão encerrada para retomar esta produção.",
-            409,
-          );
-        }
-
-                       const sessionKind =
+        // Voltar da pausa não conta como continuação.
+        // Retomar um trabalho deixado para depois conta.
+        const sessionKind =
           action === "resume"
             ? SessionKind.RESUME
             : SessionKind.CONTINUATION;
@@ -408,7 +428,7 @@ export async function changeFinalizationProductionState(
           ProductionStatus.DEFERRED,
         );
 
-        if (production.status === ProductionStatus.IN_PROGRESS) {
+        if (originalStatus === ProductionStatus.IN_PROGRESS) {
           await closeSession(SessionEndReason.DEFERRED);
         }
 
@@ -420,10 +440,11 @@ export async function changeFinalizationProductionState(
         ProductionStatus.COMPLETED,
       );
 
-      if (production.status === ProductionStatus.IN_PROGRESS) {
+      if (originalStatus === ProductionStatus.IN_PROGRESS) {
         await closeSession(SessionEndReason.MANUAL_COMPLETION);
       }
 
+      // Somente a conclusão lança a comissão.
       await createCommissionEntry(
         productionId,
         production.commissionAmountSnapshot,
