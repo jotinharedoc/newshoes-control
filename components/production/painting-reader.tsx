@@ -411,7 +411,7 @@ export function PaintingReader({
 
               <button
                 type="button"
-                disabled={busy || current !== null}
+                disabled={busy} 
                 onClick={() => changeState(production, "continue")}
                 className="rounded-xl bg-(--brand) px-4 py-3 font-semibold text-white disabled:opacity-50"
               >
@@ -422,8 +422,7 @@ export function PaintingReader({
 
           {current && (
             <p className="text-sm text-(--text-secondary)">
-              Conclua ou deixe a pintura atual para depois antes de
-              continuar outra.
+              Ao continuar outra pintura, a atual ficará para depois, com o tempo salvo.
             </p>
           )}
         </section>

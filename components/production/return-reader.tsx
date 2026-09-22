@@ -278,7 +278,7 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
               {deferred && (
                 <button
                   type="button"
-                  disabled={busy || hasCurrentReturn}
+                  disabled={busy}
                   onClick={() => void changeState(production, "start")}
                   className="primary-button w-full disabled:opacity-50 sm:col-span-2"
                 >
@@ -327,8 +327,7 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
 
             {deferred && hasCurrentReturn && (
               <p className="mt-3 text-sm text-(--text-secondary)">
-                Conclua ou deixe o retorno atual para depois antes de
-                iniciar outro.
+                  Ao iniciar outro retorno, o atual ficará para depois, com o tempo salvo.
               </p>
             )}
           </article>

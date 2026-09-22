@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
 import { CameraScanner } from "@/components/production/camera-scanner";
 
 type Unit = "PAIR" | "LEFT_FOOT" | "RIGHT_FOOT";
+
 type Action = "pause" | "resume" | "defer" | "continue" | "finish";
 
 type Production = {
@@ -40,18 +42,26 @@ const options: { value: Unit; label: string }[] = [
 ];
 
 const primary =
-  "w-full rounded-2xl bg-(--brand) px-4 py-3.5 font-semibold text-white transition hover:bg-(--brand-hover) disabled:opacity-50 disabled:cursor-not-allowed";
+  "w-full rounded-2xl bg-(--brand) px-4 py-3.5 font-semibold text-white transition hover:bg-(--brand-hover) disabled:cursor-not-allowed disabled:opacity-50";
 
 const secondary =
-  "w-full rounded-2xl border border-(--border-strong) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover) disabled:opacity-50 disabled:cursor-not-allowed";
+  "w-full rounded-2xl border border-(--border-strong) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover) disabled:cursor-not-allowed disabled:opacity-50";
 
 const panel =
   "rounded-2xl border border-(--border) bg-(--surface-soft) p-5";
 
+const actionMessages: Record<Action, string> = {
+  pause: "Produção pausada. O tempo da pausa não será contado.",
+  resume: "Produção retomada após a pausa.",
+  defer: "Produção salva para continuar depois.",
+  continue: "Continuação iniciada. Outros trabalhos abertos ficaram para depois.",
+  finish: "Finalização concluída e comissão registrada.",
+};
+
 async function requestOverview(
   method: "GET" | "POST" | "PATCH",
   body?: Record<string, unknown>,
-): Promise<Overview> {
+): Promise<Snapshot> {
   const response = await fetch(endpoint, {
     method,
     cache: "no-store",
@@ -67,11 +77,14 @@ async function requestOverview(
 
   if (!response.ok) {
     throw new Error(
-      data.error?.message ?? "Não foi possível concluir a operação.",
+      data?.error?.message ?? "Não foi possível concluir a operação.",
     );
   }
 
-  return data as Overview;
+  return {
+    overview: data as Overview,
+    receivedAt: Date.now(),
+  };
 }
 
 function errorMessage(error: unknown) {
@@ -105,21 +118,25 @@ export function FinalizationReader({ employeeName }: Props) {
   const [unit, setUnit] = useState<Unit>("PAIR");
   const [confirming, setConfirming] = useState(false);
 
+  const requestInProgress = useRef(false);
+
   const current = snapshot?.overview.current ?? null;
+  const validCode = /^\d{1,64}$/.test(code.trim());
 
   useEffect(() => {
     let cancelled = false;
 
     requestOverview("GET")
-      .then((overview) => {
+      .then((nextSnapshot) => {
         if (cancelled) return;
 
-        const now = Date.now();
-        setSnapshot({ overview, receivedAt: now });
-        setClock(now);
+        setSnapshot(nextSnapshot);
+        setClock(nextSnapshot.receivedAt);
       })
       .catch((failure: unknown) => {
-        if (!cancelled) setError(errorMessage(failure));
+        if (!cancelled) {
+          setError(errorMessage(failure));
+        }
       });
 
     return () => {
@@ -130,88 +147,115 @@ export function FinalizationReader({ employeeName }: Props) {
   useEffect(() => {
     if (current?.status !== "IN_PROGRESS") return;
 
-    const timer = window.setInterval(() => {
+    function updateClock() {
       setClock(Date.now());
-    }, 1000);
+    }
 
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(updateClock, 1000);
+
+    window.addEventListener("focus", updateClock);
+    document.addEventListener("visibilitychange", updateClock);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateClock);
+      document.removeEventListener("visibilitychange", updateClock);
+    };
   }, [current?.id, current?.status]);
 
-  function applyOverview(overview: Overview) {
-    const now = Date.now();
-    setSnapshot({ overview, receivedAt: now });
-    setClock(now);
+  function applySnapshot(nextSnapshot: Snapshot) {
+    setSnapshot(nextSnapshot);
+    setClock(nextSnapshot.receivedAt);
   }
 
   async function refresh() {
+    if (requestInProgress.current) return;
+
+    requestInProgress.current = true;
     setBusy(true);
     setError("");
     setMessage("");
     setConfirming(false);
 
     try {
-      applyOverview(await requestOverview("GET"));
+      applySnapshot(await requestOverview("GET"));
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
+      requestInProgress.current = false;
       setBusy(false);
     }
   }
 
   async function start() {
-    if (busy) return;
+    if (requestInProgress.current || !snapshot) return;
 
+    if (!validCode) {
+      setError("Informe um código com 1 a 64 números.");
+      return;
+    }
+
+    requestInProgress.current = true;
     setBusy(true);
     setError("");
     setMessage("");
 
     try {
-      const overview = await requestOverview("POST", {
+      const nextSnapshot = await requestOverview("POST", {
         code: code.trim(),
         unit,
         kind: "STANDARD",
       });
 
-      applyOverview(overview);
+      applySnapshot(nextSnapshot);
       setConfirming(false);
       setCode("");
-      setMessage("Finalização iniciada e salva.");
+      setMessage(
+        "Finalização iniciada. Outros trabalhos abertos ficaram para depois.",
+      );
     } catch (failure) {
       setError(errorMessage(failure));
+
+      try {
+        applySnapshot(await requestOverview("GET"));
+      } catch {
+        // Preserva a mensagem original caso a atualização também falhe.
+      }
     } finally {
+      requestInProgress.current = false;
       setBusy(false);
     }
   }
 
   async function changeState(production: Production, action: Action) {
-    if (busy) return;
+    if (requestInProgress.current) return;
 
+    requestInProgress.current = true;
     setBusy(true);
     setError("");
     setMessage("");
 
     try {
-      const overview = await requestOverview("PATCH", {
+      const nextSnapshot = await requestOverview("PATCH", {
         productionId: production.id,
         version: production.version,
         action,
       });
 
-      applyOverview(overview);
+      applySnapshot(nextSnapshot);
       setConfirming(false);
-
-      const messages: Record<Action, string> = {
-        pause: "Produção pausada. O tempo da pausa não será contado.",
-        resume: "Produção retomada após pausa banheiro.",
-        defer: "Produção salva para continuar depois.",
-        continue: "Continuação iniciada no mesmo registro.",
-        finish: "Finalização concluída e comissão registrada.",
-      };
-
-      setMessage(messages[action]);
+      setCode("");
+      setMessage(actionMessages[action]);
     } catch (failure) {
       setError(errorMessage(failure));
+
+      try {
+        applySnapshot(await requestOverview("GET"));
+      } catch {
+        // Preserva a mensagem original caso a atualização também falhe.
+      }
     } finally {
+      requestInProgress.current = false;
       setBusy(false);
     }
   }
@@ -221,8 +265,6 @@ export function FinalizationReader({ employeeName }: Props) {
     (current?.status === "IN_PROGRESS" && snapshot
       ? Math.max(0, clock - snapshot.receivedAt)
       : 0);
-
-  const validCode = /^\d{1,64}$/.test(code.trim());
 
   return (
     <div className="space-y-5">
@@ -246,17 +288,17 @@ export function FinalizationReader({ employeeName }: Props) {
 
       {!snapshot && !error && (
         <p className="text-sm text-(--text-secondary)">
-          Carregando suas finalizações…
+          Carregando suas finalizações...
         </p>
       )}
 
       <button
         type="button"
-        onClick={refresh}
-        disabled={busy}
+        onClick={() => void refresh()}
+        disabled={busy || (!snapshot && !error)}
         className={secondary}
       >
-        {busy ? "Aguarde…" : "Atualizar dados"}
+        {busy ? "Aguarde..." : "Atualizar dados"}
       </button>
 
       {current && (
@@ -275,28 +317,34 @@ export function FinalizationReader({ employeeName }: Props) {
             </p>
           </div>
 
-          <p className="font-mono text-xl tabular-nums text-(--brand)">
-            {formatTime(elapsed)}
-          </p>
+          <div>
+            <p className="font-mono text-xl tabular-nums text-(--brand)">
+              {formatTime(elapsed)}
+            </p>
+
+            <p className="mt-1 text-xs text-(--text-secondary)">
+              Tempo efetivamente trabalhado
+            </p>
+          </div>
 
           <button
             type="button"
             disabled={busy}
             onClick={() =>
-              changeState(
+              void changeState(
                 current,
                 current.status === "PAUSED" ? "resume" : "pause",
               )
             }
             className={secondary}
           >
-            {current.status === "PAUSED" ? "Voltei do banheiro" : "Pausa banheiro"}
+            {current.status === "PAUSED" ? "Retomar trabalho" : "Pausar trabalho"}
           </button>
 
           <button
             type="button"
             disabled={busy}
-            onClick={() => changeState(current, "defer")}
+            onClick={() => void changeState(current, "defer")}
             className={secondary}
           >
             Deixar para depois
@@ -305,7 +353,7 @@ export function FinalizationReader({ employeeName }: Props) {
           <button
             type="button"
             disabled={busy}
-            onClick={() => changeState(current, "finish")}
+            onClick={() => void changeState(current, "finish")}
             className={primary}
           >
             Concluir finalização
@@ -313,8 +361,18 @@ export function FinalizationReader({ employeeName }: Props) {
         </section>
       )}
 
-      {snapshot && !current && (
+      {snapshot && (
         <section className="space-y-5">
+          <h2 className="text-lg font-semibold text-(--text-primary)">
+            {current ? "Iniciar outro código" : "Nova finalização"}
+          </h2>
+
+          <p className="text-sm leading-6 text-(--text-secondary)">
+            Ao confirmar outro código, qualquer trabalho seu em andamento
+            ou pausado ficará para depois, com o tempo trabalhado salvo.
+            A comissão será registrada quando esse trabalho for concluído.
+          </p>
+
           {confirming ? (
             <div className={`${panel} space-y-4`}>
               <h2 className="text-xl font-semibold text-(--text-primary)">
@@ -326,10 +384,12 @@ export function FinalizationReader({ employeeName }: Props) {
                   <dt className="text-(--text-secondary)">Código</dt>
                   <dd className="text-xl font-semibold">{code.trim()}</dd>
                 </div>
+
                 <div>
                   <dt className="text-(--text-secondary)">Parte</dt>
                   <dd>{unitLabel(unit)}</dd>
                 </div>
+
                 <div>
                   <dt className="text-(--text-secondary)">Funcionário</dt>
                   <dd>{employeeName}</dd>
@@ -338,11 +398,11 @@ export function FinalizationReader({ employeeName }: Props) {
 
               <button
                 type="button"
-                onClick={start}
-                disabled={busy}
+                onClick={() => void start()}
+                disabled={busy || !validCode}
                 className={primary}
               >
-                {busy ? "Salvando…" : "Confirmar e iniciar"}
+                {busy ? "Salvando..." : "Confirmar e iniciar"}
               </button>
 
               <button
@@ -355,80 +415,81 @@ export function FinalizationReader({ employeeName }: Props) {
               </button>
             </div>
           ) : (
-            <>
-              <fieldset disabled={busy} className="space-y-3">
-                <legend className="text-sm font-medium text-(--text-primary)">
-                  Tipo de finalização
-                </legend>
+            <fieldset disabled={busy} className="space-y-3">
+              <legend className="text-sm font-medium text-(--text-primary)">
+                Tipo de finalização
+              </legend>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {options.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={unit === option.value}
-                      onClick={() => setUnit(option.value)}
-                      className={`rounded-2xl border p-4 font-semibold text-(--text-primary) disabled:opacity-50 ${
-                        unit === option.value
-                          ? "border-(--brand) bg-(--brand-soft)"
-                          : "border-(--border) bg-(--surface-soft)"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {options.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={unit === option.value}
+                    onClick={() => setUnit(option.value)}
+                    className={`rounded-2xl border p-4 font-semibold text-(--text-primary) disabled:opacity-50 ${
+                      unit === option.value
+                        ? "border-(--brand) bg-(--brand-soft)"
+                        : "border-(--border) bg-(--surface-soft)"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
 
-                <CameraScanner
-                  onDetected={(value) => {
-                    setCode(value.trim());
-                    setError("");
-                    setMessage("");
-                  }}
-                />
+              <CameraScanner
+                onDetected={(value) => {
+                  const detectedCode = value.trim();
 
-                <label
-                  htmlFor="finalization-code"
-                  className="block text-sm font-medium text-(--text-primary)"
-                >
-                  Código do tênis
-                </label>
+                  setCode(detectedCode);
+                  setError("");
+                  setMessage("");
+                }}
+              />
 
-                <input
-                  id="finalization-code"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={64}
-                  value={code}
-                  onChange={(event) => {
-                    setCode(event.target.value);
-                    setError("");
-                    setMessage("");
-                  }}
-                  placeholder="Ex.: 1001693"
-                  className="auth-input"
-                />
+              <label
+                htmlFor="finalization-code"
+                className="block text-sm font-medium text-(--text-primary)"
+              >
+                Código do tênis
+              </label>
 
-                {code && !validCode && (
-                  <p className="text-sm text-(--text-secondary)">
-                    Informe somente números, com até 64 dígitos.
-                  </p>
-                )}
+              <input
+                id="finalization-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={64}
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value);
+                  setError("");
+                  setMessage("");
+                }}
+                placeholder="Ex.: 1001693"
+                className="auth-input"
+              />
 
-                <button
-                  type="button"
-                  disabled={busy || !validCode}
-                  onClick={() => {
-                    setError("");
-                    setMessage("");
-                    setConfirming(true);
-                  }}
-                  className={primary}
-                >
-                  Conferir dados
-                </button>
-              </fieldset>
-            </>
+              {code && !validCode && (
+                <p className="text-sm text-(--text-secondary)">
+                  Informe somente números, com até 64 dígitos.
+                </p>
+              )}
+
+              <button
+                type="button"
+                disabled={busy || !validCode}
+                onClick={() => {
+                  setError("");
+                  setMessage("");
+                  setConfirming(true);
+                }}
+                className={primary}
+              >
+                Conferir dados
+              </button>
+            </fieldset>
           )}
         </section>
       )}
@@ -451,8 +512,8 @@ export function FinalizationReader({ employeeName }: Props) {
 
               <button
                 type="button"
-                disabled={busy || Boolean(current)}
-                onClick={() => changeState(production, "continue")}
+                disabled={busy}
+                onClick={() => void changeState(production, "continue")}
                 className={secondary}
               >
                 Continuar este serviço
@@ -460,11 +521,10 @@ export function FinalizationReader({ employeeName }: Props) {
             </div>
           ))}
 
-          {current && (
-            <p className="text-sm text-(--text-secondary)">
-              Conclua ou deixe o serviço atual para depois antes de continuar outro.
-            </p>
-          )}
+          <p className="text-sm text-(--text-secondary)">
+            Ao continuar um serviço, qualquer outro trabalho seu em andamento
+            ou pausado ficará para depois, com o tempo salvo.
+          </p>
         </section>
       )}
     </div>

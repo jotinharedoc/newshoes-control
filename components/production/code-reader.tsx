@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ActiveProduction } from "@/components/production/active-production";
 import { CameraScanner } from "@/components/production/camera-scanner";
@@ -35,59 +35,143 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
   const [code, setCode] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [deferring, setDeferring] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [clock, setClock] = useState(() => Date.now());
   const current = overview.current;
+  const requestInProgress = useRef(false);
 
-  useEffect(() => {
+    useEffect(() => {
     if (current?.status !== "IN_PROGRESS") return;
-    const interval = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [current?.id, current?.status]);
 
-  const elapsedTime = useMemo(() => {
+    function updateClock() {
+      setClock(Date.now());
+    }
+
+    const interval = window.setInterval(updateClock, 1000);
+
+    window.addEventListener("focus", updateClock);
+    document.addEventListener("visibilitychange", updateClock);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", updateClock);
+      document.removeEventListener("visibilitychange", updateClock);
+    };
+  }, [current?.id, current?.status]);
+    const elapsedTime = useMemo(() => {
     if (!current) return "00:00:00";
-    const sinceObservation = current.status === "IN_PROGRESS"
-      ? Math.max(0, clock - new Date(current.observedAt).getTime())
-      : 0;
-    return formatDuration(current.elapsedMilliseconds + sinceObservation);
+
+    const sinceObservation =
+      current.status === "IN_PROGRESS"
+        ? Math.max(
+            0,
+            clock - new Date(current.observedAt).getTime(),
+          )
+        : 0;
+
+    return formatDuration(
+      current.elapsedMilliseconds + sinceObservation,
+    );
   }, [clock, current]);
 
   function clearForm() {
     setCode("");
     setConfirming(false);
     setSwitching(false);
+    setDeferring(false);
   }
 
-  async function submitRequest(init: RequestInit) {
+   async function submitRequest(init: RequestInit) {
+    if (requestInProgress.current) return;
+
+    requestInProgress.current = true;
     setPending(true);
     setError("");
+
     try {
-      const nextOverview = await readOverview(await fetch("/api/production/hygiene", init));
-      setOverview(nextOverview);
-      clearForm();
+      const response = await fetch("/api/production/hygiene", init);
+      const nextOverview = await readOverview(response);
+
+     setOverview(nextOverview);
+
+setClock(
+  nextOverview.current
+    ? new Date(nextOverview.current.observedAt).getTime()
+    : 0,
+);
+
+clearForm();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível concluir a ação.");
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : "Não foi possível concluir a ação.";
+
+      setError(
+        `${message} Confira o estado atualizado antes de tentar novamente.`,
+      );
+
+      try {
+        const response = await fetch("/api/production/hygiene", {
+          cache: "no-store",
+        });
+
+        const updatedOverview = await readOverview(response);
+
+        setOverview(updatedOverview);
+        setClock(Date.now());
+        clearForm();
+      } catch {
+        setError(
+          `${message} Não foi possível atualizar os dados. Recarregue a página antes de tentar novamente.`,
+        );
+      }
+      setOverview(updatedOverview)
     } finally {
+      requestInProgress.current = false;
       setPending(false);
     }
   }
 
-  async function startProduction() {
-    const body: Record<string, unknown> = { code };
-    if (switching && current) {
+    async function startProduction() {
+    if (requestInProgress.current) return;
+
+    const normalizedCode = code.trim();
+
+    if (!/^\d{4,10}$/.test(normalizedCode)) {
+      setError("Informe um código com 4 a 10 números.");
+      return;
+    }
+
+    if (current?.code === normalizedCode) {
+      setError(
+        "Esse código já é o trabalho atual. Cancele a troca para voltar a ele.",
+      );
+      return;
+    }
+
+    const body: Record<string, unknown> = {
+      code: normalizedCode,
+    };
+
+    if (switching && current && !deferring) {
       body.currentProductionId = current.id;
       body.version = current.version;
     }
+
     await submitRequest({
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     });
   }
 
   async function runAction(production: HygieneProductionView, action: HygieneAction) {
+    if (requestInProgress.current) return;
     if (action === "finish" && !window.confirm(`Finalizar a Higienização do código ${production.code}?`)) return;
     await submitRequest({
       method: "PATCH",
@@ -96,10 +180,18 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
     });
   }
 
-  if (current && !switching) {
+    if (current && !switching) {
     return (
       <div className="space-y-4">
-        {error && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
+        {error && (
+          <p
+            role="alert"
+            className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300"
+          >
+            {error}
+          </p>
+        )}
+
         <ActiveProduction
           code={current.code}
           processName={current.processName}
@@ -111,8 +203,29 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
           onResume={() => void runAction(current, "resume")}
           onDefer={() => void runAction(current, "defer")}
           onFinish={() => void runAction(current, "finish")}
-          onStartNext={() => { setError(""); setSwitching(true); }}
+          onStartNext={() => {
+            setError("");
+            setCode("");
+            setConfirming(false);
+            setDeferring(false);
+            setSwitching(true);
+          }}
         />
+
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setError("");
+            setCode("");
+            setConfirming(false);
+            setDeferring(true);
+            setSwitching(true);
+          }}
+          className="w-full rounded-2xl border border-(--brand) bg-(--brand-soft) px-4 py-3.5 font-semibold text-(--brand) transition hover:bg-(--surface-hover) disabled:opacity-50"
+        >
+          Trocar de trabalho
+        </button>
       </div>
     );
   }
@@ -123,10 +236,18 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
         <section className="rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--brand)">{switching ? "Confirmar troca" : "Confirmar produção"}</p>
           <h2 className="mt-2 text-2xl font-semibold text-(--text-primary)">
-            {switching ? `Finalizar ${current?.code} e iniciar ${code}?` : `Iniciar código ${code}?`}
+            {switching && current
+  ? deferring
+    ? `Deixar ${current.code} para depois e iniciar ${code}?`
+    : `Finalizar ${current.code} e iniciar ${code}?`
+  : `Iniciar código ${code}?`}
           </h2>
           <p className="mt-3 text-sm leading-6 text-(--text-secondary)">
-            {switching ? "A produção atual só será finalizada depois desta confirmação." : "A Higienização será registrada como par completo."}
+            {switching && current
+  ? deferring
+    ? "O trabalho atual ficará para depois, com o tempo salvo. Sua comissão será registrada quando ele for concluído."
+    : "A produção atual será concluída e sua comissão será registrada ao confirmar."
+  : "A Higienização será registrada como par completo. Se houver outro trabalho seu aberto, ele ficará para depois."}
           </p>
         </section>
         {error && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
@@ -142,7 +263,7 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
 
   return (
     <div className="space-y-6">
-      {!current && overview.deferred.length > 0 && (
+      {(!current || deferring) && overview.deferred.length > 0 && (
         <section className="rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--brand)">Para continuar depois</p>
           <div className="mt-4 space-y-3">
@@ -163,7 +284,11 @@ export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
 
       {switching && current && (
         <div className="rounded-2xl border border-(--brand) bg-(--brand-soft) p-4 text-sm text-(--text-primary)">
-          O código {current.code} continua {current.status === "PAUSED" ? "pausado" : "em andamento"} até você confirmar a troca.
+          O código {current.code} continua{" "}
+{current.status === "PAUSED" ? "pausado" : "em andamento"}.
+{deferring
+  ? " Ele ficará para depois quando você confirmar outro código ou clicar em Continuar trabalho em uma pendência."
+  : " Ele será concluído quando você confirmar o início do próximo código."}
         </div>
       )}
 
