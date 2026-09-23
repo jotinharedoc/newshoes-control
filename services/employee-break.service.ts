@@ -50,10 +50,14 @@ function handleDatabaseError(error: unknown): never {
 export async function assertNoOpenEmployeeBreak(
   employeeId: string,
   database: Prisma.TransactionClient,
+  resumingProductionId?: string,
 ) {
   const current = await findOpenEmployeeBreak(employeeId, database);
 
-  if (current) {
+  const resumingBathroom = current?.kind === EmployeeBreakKind.BATHROOM &&
+    current.pausedProductionId === resumingProductionId;
+
+  if (current && !resumingBathroom) {
     throw new ProductionError(
       "INVALID_PRODUCTION_STATE",
       "Encerre o intervalo antes de iniciar ou retomar um trabalho.",
@@ -62,8 +66,11 @@ export async function assertNoOpenEmployeeBreak(
   }
 }
 
-export async function getEmployeeBreakOverview(employeeId: string) {
-  const current = await findOpenEmployeeBreak(employeeId);
+export async function getEmployeeBreakOverview(
+  employeeId: string,
+  database?: Prisma.TransactionClient,
+) {
+  const current = await findOpenEmployeeBreak(employeeId, database);
 
   return {
     current: current
@@ -82,9 +89,51 @@ export type EmployeeBreakOverview = Awaited<
   ReturnType<typeof getEmployeeBreakOverview>
 >;
 
+function runBreakTransaction<T>(
+  operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  database?: Prisma.TransactionClient,
+) {
+  return database ? operation(database) : runProductionTransaction(operation);
+}
+
+// Compatibilidade com as ações pause/resume das APIs de produção.
+// O chamador valida proprietário, processo e versão dentro da mesma transação.
+export async function applyProductionBathroomAction(
+  employeeId: string,
+  production: { id: string; status: ProductionStatus },
+  action: string,
+  database: Prisma.TransactionClient,
+) {
+  if (action === "pause") {
+    if (production.status !== ProductionStatus.IN_PROGRESS) {
+      throw new ProductionError(
+        "INVALID_PRODUCTION_STATE",
+        "Só é possível pausar um trabalho em andamento.",
+        409,
+      );
+    }
+    await startEmployeeBreak(employeeId, EmployeeBreakKind.BATHROOM, database);
+    return true;
+  }
+
+  if (action === "resume") {
+    const current = await findOpenEmployeeBreak(employeeId, database);
+    if (current?.kind === EmployeeBreakKind.BATHROOM &&
+        current.pausedProductionId === production.id) {
+      await finishEmployeeBreak(employeeId, current.id, database);
+      return true;
+    }
+  }
+
+  // Uma pausa anterior à adoção de EmployeeBreak pode ser retomada,
+  // sem inventar retroativamente um intervalo que não foi registrado.
+  return false;
+}
+
 export async function startEmployeeBreak(
   employeeId: string,
   kind: EmployeeBreakKind,
+  transaction?: Prisma.TransactionClient,
 ) {
   if (
     kind !== EmployeeBreakKind.LUNCH &&
@@ -98,7 +147,7 @@ export async function startEmployeeBreak(
   }
 
   try {
-    await runProductionTransaction(async (database) => {
+    await runBreakTransaction(async (database) => {
       await assertNoOpenEmployeeBreak(employeeId, database);
 
       const productions = await findEmployeeBreakProductions(
@@ -166,17 +215,18 @@ export async function startEmployeeBreak(
         now,
         database,
       );
-    });
+    }, transaction);
   } catch (error) {
     handleDatabaseError(error);
   }
 
-  return getEmployeeBreakOverview(employeeId);
+  return getEmployeeBreakOverview(employeeId, transaction);
 }
 
 export async function finishEmployeeBreak(
   employeeId: string,
   breakId: string,
+  transaction?: Prisma.TransactionClient,
 ) {
   if (typeof breakId !== "string" || !breakId.trim()) {
     throw new ProductionError(
@@ -187,7 +237,7 @@ export async function finishEmployeeBreak(
   }
 
   try {
-    await runProductionTransaction(async (database) => {
+    await runBreakTransaction(async (database) => {
       const current = await findOpenEmployeeBreak(
         employeeId,
         database,
@@ -282,10 +332,10 @@ export async function finishEmployeeBreak(
       // Almoço: o trabalho permanece DEFERRED.
       // Sem trabalho vinculado: encerra somente o intervalo.
       // Nenhum intervalo cria ou altera comissão.
-    });
+    }, transaction);
   } catch (error) {
     handleDatabaseError(error);
   }
 
-  return getEmployeeBreakOverview(employeeId);
+  return getEmployeeBreakOverview(employeeId, transaction);
 }

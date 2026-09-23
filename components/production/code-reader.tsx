@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ActiveProduction } from "@/components/production/active-production";
 import { CameraScanner } from "@/components/production/camera-scanner";
+import { EmployeeBreakControl } from "@/components/production/employee-break-control";
 import type { HygieneAction, HygieneOverview, HygieneProductionView } from "@/types/production.types";
 
 type CodeReaderProps = {
@@ -121,14 +122,17 @@ clearForm();
         const updatedOverview = await readOverview(response);
 
         setOverview(updatedOverview);
-        setClock(Date.now());
+        setClock(
+          updatedOverview.current
+            ? new Date(updatedOverview.current.observedAt).getTime()
+            : 0,
+        );
         clearForm();
       } catch {
         setError(
           `${message} Não foi possível atualizar os dados. Recarregue a página antes de tentar novamente.`,
         );
       }
-      setOverview(updatedOverview)
     } finally {
       requestInProgress.current = false;
       setPending(false);
@@ -180,6 +184,15 @@ clearForm();
     });
   }
 
+  async function refreshAfterBreak() {
+    const response = await fetch("/api/production/hygiene", { cache: "no-store" });
+    const updated = await readOverview(response);
+    setOverview(updated);
+    setClock(updated.current ? new Date(updated.current.observedAt).getTime() : 0);
+    clearForm();
+  }
+
+  function renderWork() {
     if (current && !switching) {
     return (
       <div className="space-y-4">
@@ -199,8 +212,6 @@ clearForm();
           elapsedTime={elapsedTime}
           paused={current.status === "PAUSED"}
           pending={pending}
-          onPause={() => void runAction(current, "pause")}
-          onResume={() => void runAction(current, "resume")}
           onDefer={() => void runAction(current, "defer")}
           onFinish={() => void runAction(current, "finish")}
           onStartNext={() => {
@@ -211,6 +222,12 @@ clearForm();
             setSwitching(true);
           }}
         />
+
+        {current.status === "PAUSED" && (
+          <button type="button" disabled={pending} onClick={() => void runAction(current, "resume")} className="primary-button w-full">
+            Retomar trabalho pausado
+          </button>
+        )}
 
         <button
           type="button"
@@ -318,5 +335,12 @@ clearForm();
         </button>
       )}
     </div>
+  );
+  }
+
+  return (
+    <EmployeeBreakControl disabled={pending} onWorkChanged={refreshAfterBreak}>
+      {renderWork()}
+    </EmployeeBreakControl>
   );
 }

@@ -6,6 +6,7 @@ import {
   findManagementProductions,
   type ManagementFilters,
 } from "@/repositories/management.repository";
+import { calculateManagementMetrics } from "@/services/management-metrics.service";
 
 function isWithinPeriod(
   date: Date | null,
@@ -234,6 +235,7 @@ export async function getManagementDashboard(
 
   return {
     generatedAt: now.toISOString(),
+    metrics: calculateManagementMetrics(productions, breaks, filters, now),
     period: {
       start: start.toISOString(),
       endExclusive: endExclusive.toISOString(),

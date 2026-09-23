@@ -22,7 +22,7 @@ import {
   transitionProduction,
 } from "@/repositories/production.repository";
 
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { applyProductionBathroomAction, assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { ProductionError } from "@/types/production-error.types";
 
@@ -201,7 +201,7 @@ export async function changeReturnState(
   }
 
   await runProductionTransaction(async (database) => {
-    await assertNoOpenEmployeeBreak(employeeId, database);
+    await assertNoOpenEmployeeBreak(employeeId, database, action === "resume" ? productionId : undefined);
 
     const record = await findReturnForAction(
       productionId,
@@ -294,6 +294,8 @@ export async function changeReturnState(
       }
     }
 
+    if (await applyProductionBathroomAction(employeeId, record, action, database)) return;
+
     if (action === "start" || action === "resume") {
       if (record.sessions.some((session) => !session.endedAt)) {
         throw new ProductionError(
@@ -351,15 +353,6 @@ export async function changeReturnState(
       return;
     }
 
-    if (action === "pause") {
-      await transition(
-        [ProductionStatus.IN_PROGRESS],
-        ProductionStatus.PAUSED,
-      );
-
-      await closeSession(SessionEndReason.PAUSE);
-      return;
-    }
 
     if (action === "defer") {
       await transition(

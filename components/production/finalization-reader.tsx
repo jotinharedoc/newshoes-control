@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { CameraScanner } from "@/components/production/camera-scanner";
+import { EmployeeBreakControl } from "@/components/production/employee-break-control";
 
 type Unit = "PAIR" | "LEFT_FOOT" | "RIGHT_FOOT";
 
@@ -267,6 +268,10 @@ export function FinalizationReader({ employeeName }: Props) {
       : 0);
 
   return (
+    <EmployeeBreakControl
+      disabled={busy}
+      onWorkChanged={async () => applySnapshot(await requestOverview("GET"))}
+    >
     <div className="space-y-5">
       {error && (
         <div
@@ -327,19 +332,16 @@ export function FinalizationReader({ employeeName }: Props) {
             </p>
           </div>
 
-          <button
+          {current.status === "PAUSED" && <button
             type="button"
             disabled={busy}
             onClick={() =>
-              void changeState(
-                current,
-                current.status === "PAUSED" ? "resume" : "pause",
-              )
+              void changeState(current, "resume")
             }
             className={secondary}
           >
-            {current.status === "PAUSED" ? "Retomar trabalho" : "Pausar trabalho"}
-          </button>
+            Retomar trabalho pausado
+          </button>}
 
           <button
             type="button"
@@ -528,5 +530,6 @@ export function FinalizationReader({ employeeName }: Props) {
         </section>
       )}
     </div>
+    </EmployeeBreakControl>
   );
 }

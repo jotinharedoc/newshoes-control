@@ -1,5 +1,5 @@
 import { prepareWorkSwitch } from "@/services/work-switch.service";
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { applyProductionBathroomAction, assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import {
   Prisma,
   ProductionStatus,
@@ -202,9 +202,10 @@ async function requireProductionForAction(
   employeeId: string,
   productionId: string,
   database: Prisma.TransactionClient,
+  resumingBathroom = false,
 ) {
   await requireHygieneAccess(employeeId, database);
-  await assertNoOpenEmployeeBreak(employeeId, database);
+  await assertNoOpenEmployeeBreak(employeeId, database, resumingBathroom ? productionId : undefined);
   const production = await findHygieneProductionForAction(
     productionId,
     employeeId,
@@ -259,6 +260,7 @@ export async function changeHygieneProductionState(
         employeeId,
         productionId,
         database,
+        action === "resume",
       );
       const now = new Date();
 
@@ -270,31 +272,7 @@ export async function changeHygieneProductionState(
         );
       }
 
-      if (action === "pause") {
-        assertStatus(production.status, [ProductionStatus.IN_PROGRESS]);
-        const closed = await closeOpenWorkSession(
-          production.id,
-          now,
-          SessionEndReason.PAUSE,
-          database,
-        );
-        if (closed.count !== 1) {
-          throw new ProductionError("PRODUCTION_CONFLICT", "A sessão de trabalho não está aberta.", 409);
-        }
-        await assertTransitionSucceeded(
-          await transitionProduction(
-            {
-              productionId,
-              employeeId,
-              version,
-              from: [ProductionStatus.IN_PROGRESS],
-              status: ProductionStatus.PAUSED,
-            },
-            database,
-          ),
-        );
-        return;
-      }
+      if (await applyProductionBathroomAction(employeeId, production, action, database)) return;
 
       if (action === "resume" || action === "continue") {
         const expectedStatus =

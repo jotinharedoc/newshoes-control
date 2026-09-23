@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { CameraScanner } from "@/components/production/camera-scanner";
+import { EmployeeBreakControl } from "@/components/production/employee-break-control";
 
 import type {
   PaintingAction,
@@ -205,6 +206,7 @@ export function PaintingReader({
   }
 
   return (
+    <EmployeeBreakControl disabled={busy} onWorkChanged={fetchOverview}>
     <div className="space-y-6">
       {error && (
         <p
@@ -260,21 +262,16 @@ export function PaintingReader({
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <button
+            {current.status === "PAUSED" && <button
               type="button"
               disabled={busy}
               onClick={() =>
-                changeState(
-                  current,
-                  current.status === "PAUSED" ? "resume" : "pause",
-                )
+                changeState(current, "resume")
               }
               className="rounded-xl border border-(--border-strong) px-4 py-3 font-semibold text-(--text-primary) disabled:opacity-50"
             >
-                            {current.status === "PAUSED"
-                ? "Voltei do banheiro"
-                : "Pausa banheiro"}
-            </button>
+              Retomar trabalho pausado
+            </button>}
 
             <button
               type="button"
@@ -428,5 +425,6 @@ export function PaintingReader({
         </section>
       )}
     </div>
+    </EmployeeBreakControl>
   );
 }

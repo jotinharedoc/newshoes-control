@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { EmployeeBreakControl } from "@/components/production/employee-break-control";
 
 import type {
   ReturnAction,
@@ -125,8 +126,8 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
       start: production.hasStarted
         ? "Retorno retomado como continuação."
         : "Retorno iniciado.",
-      pause: "Retorno pausado para banheiro.",
-      resume: "Retorno retomado após pausa banheiro.",
+      pause: "Intervalo de banheiro registrado.",
+      resume: "Retorno retomado após pausa.",
       defer: "Retorno salvo para continuar depois.",
       finish: "Retorno concluído, sem nova comissão.",
     };
@@ -178,6 +179,7 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
   }
 
   return (
+    <EmployeeBreakControl disabled={busy} onWorkChanged={fetchReturns}>
     <div className="space-y-5">
       {error && (
         <p
@@ -290,19 +292,16 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
 
               {(running || paused) && (
                 <>
-                  <button
+                  {paused && <button
                     type="button"
                     disabled={busy}
                     onClick={() =>
-                      void changeState(
-                        production,
-                        paused ? "resume" : "pause",
-                      )
+                      void changeState(production, "resume")
                     }
                     className="rounded-xl border border-(--border-strong) px-4 py-3 font-semibold text-(--text-primary) disabled:opacity-50"
                   >
-                  {paused ? "Voltei do banheiro" : "Pausa banheiro"}
-                  </button>
+                    Retomar trabalho pausado
+                  </button>}
 
                   <button
                     type="button"
@@ -334,5 +333,6 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
         );
       })}
     </div>
+    </EmployeeBreakControl>
   );
 }

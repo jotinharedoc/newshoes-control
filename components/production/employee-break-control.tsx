@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { EmployeeBreakOverview } from "@/services/employee-break.service";
 
@@ -66,7 +66,15 @@ async function readOverview() {
   return (await response.json()) as EmployeeBreakOverview;
 }
 
-export function EmployeeBreakControl() {
+export function EmployeeBreakControl({
+  children,
+  onWorkChanged,
+  disabled: workBusy = false,
+}: {
+  children?: ReactNode;
+  onWorkChanged?: () => Promise<void>;
+  disabled?: boolean;
+}) {
   const [overview, setOverview] = useState<EmployeeBreakOverview | null>(
     null,
   );
@@ -109,7 +117,7 @@ export function EmployeeBreakControl() {
   }, []);
 
   async function refresh() {
-    if (requestInProgress.current) return;
+    if (requestInProgress.current || workBusy) return;
 
     requestInProgress.current = true;
     setBusy(true);
@@ -122,6 +130,7 @@ export function EmployeeBreakControl() {
       if (mounted.current) {
         setOverview(result);
       }
+      await onWorkChanged?.();
     } catch {
       if (mounted.current) {
         setOverview(null);
@@ -139,7 +148,7 @@ export function EmployeeBreakControl() {
   }
 
   async function send(kind?: BreakKind) {
-    if (requestInProgress.current || !overview) return;
+    if (requestInProgress.current || workBusy || !overview) return;
 
     const current = overview.current;
 
@@ -187,6 +196,7 @@ export function EmployeeBreakControl() {
           if (mounted.current) {
             setOverview(updated);
           }
+          await onWorkChanged?.();
         } catch {
           if (mounted.current) {
             setOverview(null);
@@ -202,12 +212,13 @@ export function EmployeeBreakControl() {
       if (!mounted.current) return;
 
       setOverview(updated);
+      await onWorkChanged?.();
 
       if (current) {
         setNotice(
           current.kind === "LUNCH"
             ? "Almoço encerrado. Os trabalhos deixados para depois podem ser continuados."
-            : "Intervalo de banheiro encerrado. Confira seu trabalho ao abrir o processo.",
+            : "Intervalo de banheiro encerrado. O trabalho pausado por ele foi retomado se a autorização continua válida.",
         );
       } else {
         setNotice(
@@ -233,9 +244,10 @@ export function EmployeeBreakControl() {
   }
 
   const current = overview?.current;
-  const disabled = loading || busy || overview === null;
+  const disabled = loading || busy || overview === null || workBusy;
 
   return (
+    <>
     <section className="mt-6 space-y-4 rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -320,12 +332,19 @@ export function EmployeeBreakControl() {
 
       <button
         type="button"
-        disabled={loading || busy}
+        disabled={loading || busy || workBusy}
         onClick={() => void refresh()}
         className="text-sm font-semibold text-(--brand) disabled:opacity-50"
       >
         Atualizar intervalos
       </button>
     </section>
+    {children && (
+      <fieldset disabled={disabled || Boolean(current)} className="mt-5 min-w-0">
+        <legend className="sr-only">Trabalhos de produção</legend>
+        {children}
+      </fieldset>
+    )}
+    </>
   );
 }

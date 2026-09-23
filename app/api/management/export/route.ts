@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { addManagementMetricSheets } from "@/services/management-export.service";
 
 import { requirePageAccess } from "@/lib/auth-page";
 import {
@@ -173,6 +174,7 @@ export async function GET(request: Request) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "NEWSHOES CONTROL";
   workbook.created = new Date(data.generatedAt);
+  addManagementMetricSheets(workbook, data);
 
   const employeeName = employeeId
     ? data.filterOptions.employees.find((item) => item.id === employeeId)

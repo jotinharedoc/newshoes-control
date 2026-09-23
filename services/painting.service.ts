@@ -23,7 +23,7 @@ import {
   upsertShoe,
 } from "@/repositories/production.repository";
 
-import { assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
+import { applyProductionBathroomAction, assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { ProductionError } from "@/types/production-error.types";
 
@@ -259,7 +259,7 @@ export async function changePaintingProductionState(
         database,
       );
 
-      await assertNoOpenEmployeeBreak(employeeId, database);
+      await assertNoOpenEmployeeBreak(employeeId, database, action === "resume" ? productionId : undefined);
 
       const production = await findPaintingForAction(
         productionId,
@@ -339,15 +339,7 @@ export async function changePaintingProductionState(
         }
       }
 
-      if (action === "pause") {
-        await transition(
-          [ProductionStatus.IN_PROGRESS],
-          ProductionStatus.PAUSED,
-        );
-
-        await closeSession(SessionEndReason.PAUSE);
-        return;
-      }
+      if (await applyProductionBathroomAction(employeeId, production, action, database)) return;
 
       if (action === "resume" || action === "continue") {
         const previousSession =

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProductivityPanel } from "@/components/management/productivity-panel";
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requirePageAccess } from "@/lib/auth-page";
@@ -313,6 +314,8 @@ export default async function ManagementPage({
               em higienização, finalização e pintura. Retornos ficam separados.
               Os tempos e as comissões consideram somente o período escolhido.
             </p>
+
+            <ProductivityPanel metrics={data.metrics} />
 
             {[
               { title: "Por funcionário", groups: data.byEmployee },

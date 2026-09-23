@@ -90,6 +90,7 @@ beforeEach(() => {
 
 test("início valida autorização e salva comissão e sessão inicial", async () => {
   const record = productionRecord();
+  let created = false;
 
   mock.method(
     prisma.employeeProcess,
@@ -106,13 +107,16 @@ test("início valida autorização e salva comissão e sessão inicial", async (
   const create = mock.method(
     prisma.production,
     "create",
-    async () => record,
+    async () => {
+      created = true;
+      return record;
+    },
   );
 
   mock.method(
     prisma.production,
     "findMany",
-    async () => [record],
+    async () => created ? [record] : [],
   );
 
   const result = await startHygieneProduction(
@@ -163,6 +167,18 @@ test(
   async () => {
     const record = productionRecord();
     const commissionCreates: unknown[] = [];
+    let employeeBreak: {
+      id: string; kind: "BATHROOM"; startedAt: Date; pausedProductionId: string;
+    } | null = null;
+    mock.method(prisma.employeeBreak, "findFirst", async () => employeeBreak);
+    mock.method(prisma.employeeBreak, "create", async (args: Prisma.EmployeeBreakCreateArgs) => {
+      employeeBreak = { id: "break-1", kind: "BATHROOM", startedAt: args.data.startedAt as Date, pausedProductionId: record.id };
+      return employeeBreak;
+    });
+    mock.method(prisma.employeeBreak, "updateMany", async () => {
+      employeeBreak = null;
+      return { count: 1 };
+    });
 
     mock.method(
       prisma.employeeProcess,
@@ -191,14 +207,18 @@ test(
             : null;
         }
 
-        return record;
+        return args.select?.sessions
+          ? { ...record, sessions: record.sessions.filter(session => !session.endedAt) }
+          : record;
       },
     );
 
     mock.method(
       prisma.production,
       "findMany",
-      async () => {
+      async (args: Prisma.ProductionFindManyArgs) => {
+        const id = args.where?.id;
+        if (typeof id === "object" && id.not === record.id) return [];
         const visibleStatuses: ProductionStatus[] = [
           ProductionStatus.IN_PROGRESS,
           ProductionStatus.PAUSED,
