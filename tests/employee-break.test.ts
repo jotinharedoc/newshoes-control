@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 import { Prisma, type EmployeeBreakKind, type ProductionStatus } from "../lib/generated/prisma/client";
 import { prisma } from "./fake-prisma";
-import { startEmployeeBreak, finishEmployeeBreak } from "../services/employee-break.service";
+import { startEmployeeBreak, finishEmployeeBreak, getEmployeeBreakOverview } from "../services/employee-break.service";
 import { startHygieneProduction, changeHygieneProductionState } from "../services/production.service";
 import { startFinalizationProduction, changeFinalizationProductionState } from "../services/finalization.service";
 import { startPaintingProduction, changePaintingProductionState } from "../services/painting.service";
@@ -10,8 +10,26 @@ import { changeReturnState } from "../services/return.service";
 
 afterEach(() => mock.restoreAll());
 
+for (const kind of ["BATHROOM", "LUNCH"] as const) {
+  test(`funcionário operacional pode iniciar ${kind}`, async () => {
+    fixture(null);
+    const result = await startEmployeeBreak("employee", kind);
+    assert.equal(result.current?.kind, kind);
+  });
+  test(`perfil de gerência não pode iniciar ${kind}, independentemente do nome`, async () => {
+    fixture(null);
+    mock.method(prisma.employee, "findFirst", async (args: Prisma.EmployeeFindFirstArgs) => {
+      assert.deepEqual(args.where, { id: "manager", active: true, role: { active: true, permissions: { none: { permission: { code: "management.access" } } } } });
+      return null;
+    });
+    await assert.rejects(startEmployeeBreak("manager", kind), { code: "PROCESS_NOT_AUTHORIZED", status: 403 });
+    assert.equal((await getEmployeeBreakOverview("manager")).current, null);
+  });
+}
+
 // Novos registros em memória; nenhuma conexão com o banco da loja.
 function fixture(initialStatus: ProductionStatus | null) {
+  mock.method(prisma.employee, "findFirst", async () => ({ id: "employee" }));
   const production = { id: "p1", status: initialStatus, version: 0, processTypeId: "process" };
   let current: { id: string; kind: EmployeeBreakKind; startedAt: Date; pausedProductionId: string | null } | null = null;
   const sessions: string[] = [];

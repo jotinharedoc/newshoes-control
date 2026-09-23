@@ -52,6 +52,7 @@ export default async function CleaningPage() {
 
           <div className="mt-8">
             <CodeReader
+              canUseBreaks={!employee.canAccessManagement}
               employeeName={employee.name}
               initialOverview={initialOverview}
             />

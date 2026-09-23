@@ -7,6 +7,7 @@ import {
   type ManagementFilters,
 } from "@/repositories/management.repository";
 import { calculateManagementMetrics } from "@/services/management-metrics.service";
+import { buildManagementExportRows } from "@/services/management-export-rows.service";
 
 function isWithinPeriod(
   date: Date | null,
@@ -236,6 +237,7 @@ export async function getManagementDashboard(
   return {
     generatedAt: now.toISOString(),
     metrics: calculateManagementMetrics(productions, breaks, filters, now),
+    employeeExportRows: buildManagementExportRows(productions, filters, now),
     period: {
       start: start.toISOString(),
       endExclusive: endExclusive.toISOString(),

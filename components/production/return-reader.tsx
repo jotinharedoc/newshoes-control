@@ -9,6 +9,7 @@ import type {
 } from "@/services/return.service";
 
 type ReturnReaderProps = {
+  canUseBreaks: boolean;
   initialReturns: ReturnProductionView[];
 };
 
@@ -65,7 +66,7 @@ function ReturnTimer({
   );
 }
 
-export function ReturnReader({ initialReturns }: ReturnReaderProps) {
+export function ReturnReader({ initialReturns, canUseBreaks }: ReturnReaderProps) {
   const [returns, setReturns] = useState(initialReturns);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -179,7 +180,7 @@ export function ReturnReader({ initialReturns }: ReturnReaderProps) {
   }
 
   return (
-    <EmployeeBreakControl disabled={busy} onWorkChanged={fetchReturns}>
+    <EmployeeBreakControl canUseBreaks={canUseBreaks} disabled={busy} onWorkChanged={fetchReturns}>
     <div className="space-y-5">
       {error && (
         <p

@@ -12,6 +12,7 @@ import type {
 } from "@/services/painting.service";
 
 type PaintingReaderProps = {
+  canUseBreaks: boolean;
   employeeName: string;
   initialOverview: PaintingOverview;
 };
@@ -64,6 +65,7 @@ function ProductionTimer({
 }
 
 export function PaintingReader({
+  canUseBreaks,
   employeeName,
   initialOverview,
 }: PaintingReaderProps) {
@@ -206,7 +208,7 @@ export function PaintingReader({
   }
 
   return (
-    <EmployeeBreakControl disabled={busy} onWorkChanged={fetchOverview}>
+    <EmployeeBreakControl canUseBreaks={canUseBreaks} disabled={busy} onWorkChanged={fetchOverview}>
     <div className="space-y-6">
       {error && (
         <p

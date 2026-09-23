@@ -61,6 +61,7 @@ export default async function PaintingPage() {
 
           <div className="mt-8">
             <PaintingReader
+              canUseBreaks={!employee.canAccessManagement}
               employeeName={employee.name}
               initialOverview={initialOverview}
             />

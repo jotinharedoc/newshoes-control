@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { MANAGEMENT_PERMISSION } from "@/utils/access";
 
 import {
   EmployeeBreakKind,
@@ -7,6 +8,13 @@ import {
 } from "@/lib/generated/prisma/client";
 
 type DatabaseClient = Prisma.TransactionClient | typeof prisma;
+
+export function findOperationalBreakEmployee(employeeId: string, database: DatabaseClient = prisma) {
+  return database.employee.findFirst({
+    where: { id: employeeId, active: true, role: { active: true, permissions: { none: { permission: { code: MANAGEMENT_PERMISSION } } } } },
+    select: { id: true },
+  });
+}
 
 export function findOpenEmployeeBreak(
   employeeId: string,

@@ -66,15 +66,23 @@ async function readOverview() {
   return (await response.json()) as EmployeeBreakOverview;
 }
 
-export function EmployeeBreakControl({
-  children,
-  onWorkChanged,
-  disabled: workBusy = false,
-}: {
+type EmployeeBreakControlProps = {
   children?: ReactNode;
   onWorkChanged?: () => Promise<void>;
   disabled?: boolean;
-}) {
+  canUseBreaks?: boolean;
+};
+
+export function EmployeeBreakControl(props: EmployeeBreakControlProps) {
+  if (props.canUseBreaks === false) return <>{props.children}</>;
+  return <OperationalEmployeeBreakControl {...props} />;
+}
+
+function OperationalEmployeeBreakControl({
+  children,
+  onWorkChanged,
+  disabled: workBusy = false,
+}: EmployeeBreakControlProps) {
   const [overview, setOverview] = useState<EmployeeBreakOverview | null>(
     null,
   );

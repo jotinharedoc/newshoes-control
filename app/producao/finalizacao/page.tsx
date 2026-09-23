@@ -38,7 +38,7 @@ export default async function FinalizationPage() {
           </div>
 
           <div className="mt-8">
-            <FinalizationReader employeeName={employee.name} />
+            <FinalizationReader employeeName={employee.name} canUseBreaks={!employee.canAccessManagement} />
           </div>
         </section>
       </div>

@@ -15,6 +15,7 @@ type Break = { id: string; employeeId: string; kind: string; pausedProductionId:
 
 // Somente a persistência é simulada: os fluxos chamam services/repositories reais.
 export function workflowFixture() {
+  mock.method(prisma.employee, "findFirst", async () => ({ id: "workflow-employee" }));
   const employeeId = "workflow-employee";
   const records: WorkRecord[] = [];
   const breaks: Break[] = [];

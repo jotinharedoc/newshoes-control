@@ -13,6 +13,7 @@ import {
   findBreakProductionAccess,
   findEmployeeBreakProductions,
   findOpenEmployeeBreak,
+  findOperationalBreakEmployee,
 } from "@/repositories/employee-break.repository";
 
 import {
@@ -148,6 +149,9 @@ export async function startEmployeeBreak(
 
   try {
     await runBreakTransaction(async (database) => {
+      if (!(await findOperationalBreakEmployee(employeeId, database))) {
+        throw new ProductionError("PROCESS_NOT_AUTHORIZED", "Perfis de gerência não podem iniciar intervalos operacionais.", 403);
+      }
       await assertNoOpenEmployeeBreak(employeeId, database);
 
       const productions = await findEmployeeBreakProductions(

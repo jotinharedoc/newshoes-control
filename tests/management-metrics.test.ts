@@ -50,7 +50,8 @@ test("sábado tem quatro horas, domingo zero e ociosidade desconta ambos os inte
   assert.equal(data.daily[0].expectedMs, 4 * hour);
   assert.equal(data.daily[0].idleMs, 2 * hour);
   assert.equal(data.daily[1].expectedMs, 0);
-  assert.equal(data.daily[1].idleMs, 0);
+  assert.equal(data.daily[1].idleMs, null);
+  assert.equal(data.totals.idleDays, 1);
 });
 
 test("dia útil desconta trabalho, banheiro e almoço; não cria faltas em dias sem registro", () => {
@@ -61,6 +62,27 @@ test("dia útil desconta trabalho, banheiro e almoço; não cria faltas em dias 
   assert.equal(data.totals.idleMs, 5.5 * hour);
   assert.equal(data.totals.idleDays, 1);
   assert.equal(data.daily.length, 1);
+});
+
+test("domingo não aumenta idleDays e metas consideram dois turnos úteis, um no sábado e nenhum no domingo", () => {
+  const data = calculateManagementMetrics([], [18,19,20].map(day => ({ employee, kind: "LUNCH", startedAt: new Date(`2026-09-${day}T16:00:00Z`), endedAt: new Date(`2026-09-${day}T17:00:00Z`) })), filters, now);
+  assert.equal(data.totals.idleDays, 2);
+  assert.equal(data.totals.idleMs, 10 * hour);
+  assert.equal(data.totals.goalPeriods, 3);
+  assert.equal(data.totals.goalsAchievedPercent, 0);
+  assert.deepEqual(data.daily.map(day => day.expectedMs), [8 * hour, 4 * hour, 0]);
+  const filtered = calculateManagementMetrics([], [{ employee, kind: "LUNCH", startedAt: new Date("2026-09-18T16:00:00Z"), endedAt: new Date("2026-09-18T17:00:00Z") }], { ...filters, processTypeId: "process" }, now);
+  assert.equal(filtered.totals.idleDays, 0);
+});
+
+test("taxa de metas batidas ignora tarde do sábado e domingo", () => {
+  const rows = ["2026-09-19T12:00:00Z", "2026-09-19T17:00:00Z", "2026-09-20T12:00:00Z"].map(time => production({
+    processType: { id: "paint", name: "Pintura" }, completedAt: new Date(time), sessions: [],
+  }));
+  const data = calculateManagementMetrics(rows, [], filters, now);
+  assert.equal(data.totals.goalPeriods, 1);
+  assert.equal(data.totals.goalsAchieved, 1);
+  assert.equal(data.totals.goalsAchievedPercent, 100);
 });
 
 test("sessões cruzando meia-noite são divididas pelo dia local e recortadas no período", () => {

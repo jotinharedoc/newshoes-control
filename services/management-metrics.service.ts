@@ -109,11 +109,12 @@ export function calculateManagementMetrics(
     const expectedMs = (config.dailyHours[day.weekday] ?? 0) * 3_600_000;
     const completeDay = start <= midnight(day.day) && end >= midnight(nextDay(day.day));
     // A process filter cannot measure employee idle time: other processes are omitted.
-    const idleMs = !filters.processTypeId && completeDay
+    const idleMs = !filters.processTypeId && completeDay && expectedMs > 0
       ? Math.max(0, expectedMs - unionMs([...work, ...bathroom, ...(config.deductLunchFromIdle ? lunch : [])]))
       : null;
     return { ...day, expectedMs, workedMs: unionMs(work), bathroomMs: unionMs(bathroom), lunchMs: unionMs(lunch), idleMs,
-      goalsAchieved: Number(day.morningGoalPercent >= 100 - 1e-8) + Number(day.afternoonGoalPercent >= 100 - 1e-8),
+      goalPeriods: day.weekday === 0 ? 0 : day.weekday === 6 ? 1 : 2,
+      goalsAchieved: day.weekday === 0 ? 0 : Number(day.morningGoalPercent >= 100 - 1e-8) + (day.weekday === 6 ? 0 : Number(day.afternoonGoalPercent >= 100 - 1e-8)),
     };
   }).sort((a, b) => a.day.localeCompare(b.day) || a.employeeName.localeCompare(b.employeeName, "pt-BR"));
   function summarize(selected: typeof daily) {
@@ -122,7 +123,9 @@ export function calculateManagementMetrics(
     const counts = emptyCounts();
     for (const day of selected) for (const key of Object.keys(counts) as (keyof typeof counts)[]) counts[key] += day[key];
     const activeDays = new Set(selected.map(d => d.day)).size;
-    const eligible = selected.filter(d => d.idleMs !== null);
+    const eligible = selected.filter(d => d.idleMs !== null && d.expectedMs > 0);
+    const goalPeriods = selected.reduce((sum, day) => sum + day.goalPeriods, 0);
+    const goalsAchieved = selected.reduce((sum, day) => sum + day.goalsAchieved, 0);
     return {
       ...counts, activeDays,
       averageProductionsPerDay: activeDays ? counts.completedProductions / activeDays : 0,
@@ -133,7 +136,9 @@ export function calculateManagementMetrics(
       idleDays: eligible.length,
       morningGoalPercent: selected.length ? selected.reduce((sum, d) => sum + d.morningGoalPercent, 0) / selected.length : 0,
       afternoonGoalPercent: selected.length ? selected.reduce((sum, d) => sum + d.afternoonGoalPercent, 0) / selected.length : 0,
-      goalsAchieved: selected.reduce((sum, d) => sum + d.goalsAchieved, 0),
+      goalsAchieved,
+      goalPeriods,
+      goalsAchievedPercent: goalPeriods ? goalsAchieved / goalPeriods * 100 : 0,
     };
   }
   const employees = new Map(productions.map(p => [p.employee.id, p.employee.name]));
@@ -146,7 +151,7 @@ export function calculateManagementMetrics(
       ...config,
       averageRule: "Produções padrão concluídas / dias com trabalho, conclusão ou intervalo registrado. Retornos não entram na quantidade.",
       durationRule: "Média do tempo total das sessões de produções padrão concluídas no período, incluindo sessões de dias anteriores.",
-      goalRule: "Contribuições por produção padrão somadas no turno da conclusão, no horário de São Paulo. Percentuais do período são médias por funcionário/dia com atividade; metas atingidas contam turnos com pelo menos 100%.",
+      goalRule: "Contribuições por produção padrão somadas no turno da conclusão, no horário de São Paulo. Metas Batidas é a proporção dos turnos com pelo menos 100%: dois turnos por dia útil com atividade, somente manhã no sábado e nenhum no domingo.",
       idleRule: `Estimativa apenas em dias completos com atividade registrada: jornada menos trabalho, banheiro${config.deductLunchFromIdle ? " e almoço" : ""}, mínimo zero. Sem dados de presença, dias sem registro não contam. Indisponível com filtro de processo ou dia ainda em curso. Intervalos sobrepostos descontam uma única vez.`,
     },
   };

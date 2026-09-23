@@ -31,6 +31,7 @@ type Snapshot = {
 };
 
 type Props = {
+  canUseBreaks: boolean;
   employeeName: string;
 };
 
@@ -108,7 +109,7 @@ function unitLabel(unit: Unit) {
   return options.find((option) => option.value === unit)?.label ?? unit;
 }
 
-export function FinalizationReader({ employeeName }: Props) {
+export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [clock, setClock] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -269,6 +270,7 @@ export function FinalizationReader({ employeeName }: Props) {
 
   return (
     <EmployeeBreakControl
+      canUseBreaks={canUseBreaks}
       disabled={busy}
       onWorkChanged={async () => applySnapshot(await requestOverview("GET"))}
     >

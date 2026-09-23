@@ -8,6 +8,7 @@ import { EmployeeBreakControl } from "@/components/production/employee-break-con
 import type { HygieneAction, HygieneOverview, HygieneProductionView } from "@/types/production.types";
 
 type CodeReaderProps = {
+  canUseBreaks: boolean;
   employeeName: string;
   initialOverview: HygieneOverview;
 };
@@ -31,7 +32,7 @@ async function readOverview(response: Response): Promise<HygieneOverview> {
   return payload as HygieneOverview;
 }
 
-export function CodeReader({ employeeName, initialOverview }: CodeReaderProps) {
+export function CodeReader({ employeeName, initialOverview, canUseBreaks }: CodeReaderProps) {
   const [overview, setOverview] = useState(initialOverview);
   const [code, setCode] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -339,7 +340,7 @@ clearForm();
   }
 
   return (
-    <EmployeeBreakControl disabled={pending} onWorkChanged={refreshAfterBreak}>
+    <EmployeeBreakControl canUseBreaks={canUseBreaks} disabled={pending} onWorkChanged={refreshAfterBreak}>
       {renderWork()}
     </EmployeeBreakControl>
   );

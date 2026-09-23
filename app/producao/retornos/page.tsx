@@ -42,7 +42,7 @@ export default async function ReturnsPage() {
           </p>
 
           <div className="mt-8">
-            <ReturnReader initialReturns={initialReturns} />
+            <ReturnReader initialReturns={initialReturns} canUseBreaks={!employee.canAccessManagement} />
           </div>
         </section>
       </div>

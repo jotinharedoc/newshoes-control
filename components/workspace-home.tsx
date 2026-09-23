@@ -121,7 +121,7 @@ export function WorkspaceHome({
 
           {!management && (
             <>
-              <EmployeeBreakControl />
+              <EmployeeBreakControl canUseBreaks={!canAccessManagement} />
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <article className="flex min-h-55 flex-col rounded-2xl border border-(--border) bg-(--surface-soft) p-5">
