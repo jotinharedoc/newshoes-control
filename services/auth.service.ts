@@ -3,8 +3,10 @@ import { compare, hash } from "bcryptjs";
 import {
   findActiveEmployees,
   findEmployeeForAuthentication,
+  blockEmployeePin,
   registerFailedPinAttempt,
   resetPinAttempts,
+  runAuthenticationTransaction,
   updateEmployeePin,
 } from "@/repositories/employee.repository";
 import {
@@ -43,90 +45,89 @@ export async function authenticateEmployee(
     );
   }
 
-  const employee = await findEmployeeForAuthentication(employeeId);
+  const outcome = await runAuthenticationTransaction(employeeId, async database => {
+    const employee = await findEmployeeForAuthentication(employeeId, database);
 
-  if (!employee?.pinHash || !employee.role.active) {
-    throw new AuthError(
-      "INVALID_CREDENTIALS",
-      "Funcionário ou PIN inválido.",
-      401,
-    );
-  }
+    if (!employee?.pinHash || !employee.role.active) {
+      throw new AuthError(
+        "INVALID_CREDENTIALS",
+        "Funcionário ou PIN inválido.",
+        401,
+      );
+    }
 
-  const now = new Date();
+    const now = new Date();
 
-  const lockIsActive =
-    employee.pinLockedUntil &&
-    employee.pinLockedUntil.getTime() > now.getTime();
+    const lockIsActive =
+      employee.pinLockedUntil &&
+      employee.pinLockedUntil.getTime() > now.getTime();
 
-  if (lockIsActive) {
-    throw new AuthError(
-      "ACCOUNT_LOCKED",
-      "Muitas tentativas incorretas. Aguarde antes de tentar novamente.",
-      429,
-    );
-  }
+    if (lockIsActive) {
+      throw new AuthError(
+        "ACCOUNT_LOCKED",
+        "Muitas tentativas incorretas. Aguarde antes de tentar novamente.",
+        429,
+      );
+    }
 
-  const previousAttempts =
-    employee.pinLockedUntil &&
-    employee.pinLockedUntil.getTime() <= now.getTime()
-      ? 0
-      : employee.failedPinAttempts;
+    if (employee.pinLockedUntil && employee.pinLockedUntil.getTime() <= now.getTime()) {
+      await resetPinAttempts(employee.id, database);
+    }
 
-  const pinIsValid = await compare(pin, employee.pinHash);
+    const pinIsValid = await compare(pin, employee.pinHash);
 
-  if (!pinIsValid) {
-    const failedPinAttempts = previousAttempts + 1;
+    if (!pinIsValid) {
+      const updated = await registerFailedPinAttempt(employee.id, database);
 
-    const reachedLimit =
-      failedPinAttempts >= authConfig.maxFailedAttempts;
+      const reachedLimit =
+        updated.failedPinAttempts >= authConfig.maxFailedAttempts;
 
-    const pinLockedUntil = reachedLimit
-      ? new Date(
-          Date.now() + authConfig.lockMinutes * 60 * 1000,
-        )
-      : null;
+      const pinLockedUntil = reachedLimit
+        ? new Date(
+            Date.now() + authConfig.lockMinutes * 60 * 1000,
+          )
+        : null;
 
-    await registerFailedPinAttempt(
-      employee.id,
-      failedPinAttempts,
-      pinLockedUntil,
-    );
+      if (pinLockedUntil) await blockEmployeePin(employee.id, pinLockedUntil, database);
 
-    throw new AuthError(
-      reachedLimit ? "ACCOUNT_LOCKED" : "INVALID_CREDENTIALS",
-      reachedLimit
-        ? "Muitas tentativas incorretas. Aguarde antes de tentar novamente."
-        : "Funcionário ou PIN inválido.",
-      reachedLimit ? 429 : 401,
-    );
-  }
+      // Commit the failed attempt before rejecting; throwing here would roll it back.
+      return { error: new AuthError(
+        reachedLimit ? "ACCOUNT_LOCKED" : "INVALID_CREDENTIALS",
+        reachedLimit
+          ? "Muitas tentativas incorretas. Aguarde antes de tentar novamente."
+          : "Funcionário ou PIN inválido.",
+        reachedLimit ? 429 : 401,
+      ) };
+    }
 
-  await resetPinAttempts(employee.id);
+    await resetPinAttempts(employee.id, database);
 
-  const sessionToken = createSessionToken();
-  const tokenHash = hashSessionToken(sessionToken);
-  const expiresAt = createSessionExpiration();
+    const sessionToken = createSessionToken();
+    const tokenHash = hashSessionToken(sessionToken);
+    const expiresAt = createSessionExpiration();
 
-  await createManagementSession({
-    employeeId: employee.id,
-    tokenHash,
-    expiresAt,
+    await createManagementSession({
+      employeeId: employee.id,
+      tokenHash,
+      expiresAt,
+    }, database);
+
+    const { canAccessManagement, destination } = getAccessProfile(employee);
+
+    return { result: {
+      sessionToken,
+      expiresAt,
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        mustChangePin: employee.mustChangePin,
+        canAccessManagement,
+      },
+      destination,
+    } };
   });
-
-  const { canAccessManagement, destination } = getAccessProfile(employee);
-
-  return {
-    sessionToken,
-    expiresAt,
-    employee: {
-      id: employee.id,
-      name: employee.name,
-      mustChangePin: employee.mustChangePin,
-      canAccessManagement,
-    },
-    destination,
-  };
+  if (outcome.error) throw outcome.error;
+  return outcome.result;
 }
 
 export async function changeEmployeePin(

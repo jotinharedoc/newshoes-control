@@ -7,6 +7,7 @@ async function unexpectedQuery(args: unknown): Promise<unknown> {
 }
 
 export const prisma = {
+  $queryRaw: (query: TemplateStringsArray, ...values: unknown[]) => unexpectedQuery({ query, values }),
   employeeBreak: {
     findMany: (args: Prisma.EmployeeBreakFindManyArgs) => unexpectedQuery(args),
     findFirst: (args: Prisma.EmployeeBreakFindFirstArgs) => unexpectedQuery(args),

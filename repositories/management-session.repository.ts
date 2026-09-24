@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 interface CreateSessionInput {
   employeeId: string;
@@ -10,8 +11,8 @@ export async function createManagementSession({
   employeeId,
   tokenHash,
   expiresAt,
-}: CreateSessionInput) {
-  return prisma.managementSession.create({
+}: CreateSessionInput, database: Prisma.TransactionClient = prisma) {
+  return database.managementSession.create({
     data: {
       employeeId,
       tokenHash,

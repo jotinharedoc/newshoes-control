@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, mock, test } from "node:test";
+import { afterEach, beforeEach, mock, test } from "node:test";
 import { hash } from "bcryptjs";
 import { prisma } from "./fake-prisma";
 import { authenticateEmployee, changeEmployeePin, getAuthenticatedEmployee, logoutEmployee, requireAccess } from "../services/auth.service";
@@ -19,6 +19,7 @@ function sessionFor(overrides: Partial<typeof employee> = {}) {
 }
 
 afterEach(() => mock.restoreAll());
+beforeEach(() => { mock.method(prisma, "$queryRaw", async () => []); });
 
 test("sessão ausente não consulta o banco", async () => {
   const lookup = sessionFor();
@@ -74,13 +75,35 @@ test("login correto gera sessão com hash e exige troca do PIN provisório", asy
   assert.equal(create.mock.calls[0].arguments[0]?.data.tokenHash, hashSessionToken(result.sessionToken));
 });
 
+test("PIN definitivo correto autentica e mantém o destino de produção", async () => {
+  const pinHash = await hash("1234", 4);
+  mock.method(prisma.employee, "findFirst", async () => ({ ...employee, pinHash }));
+  mock.method(prisma.employee, "update", async () => employee);
+  const create = mock.method(prisma.managementSession, "create", async () => ({}));
+  const result = await authenticateEmployee(employee.id, "1234");
+  assert.equal(result.destination, "/producao");
+  assert.equal(result.employee.mustChangePin, false);
+  assert.equal(create.mock.callCount(), 1);
+});
+
+test("PIN incorreto é rejeitado e registra tentativa sem criar sessão", async () => {
+  const pinHash = await hash("1234", 4);
+  mock.method(prisma.employee, "findFirst", async () => ({ ...employee, pinHash }));
+  const update = mock.method(prisma.employee, "update", async () => employee);
+  const create = mock.method(prisma.managementSession, "create", async () => ({}));
+  await assert.rejects(authenticateEmployee(employee.id, "5678"), { code: "INVALID_CREDENTIALS", status: 401 });
+  assert.deepEqual(update.mock.calls[0].arguments[0]?.data.failedPinAttempts, { increment: 1 });
+  assert.equal(create.mock.callCount(), 0);
+});
+
 test("PIN incorreto no limite bloqueia e não cria sessão", async () => {
   const pinHash = await hash("1234", 4);
   mock.method(prisma.employee, "findFirst", async () => ({ ...employee, pinHash, failedPinAttempts: 999 }));
-  const update = mock.method(prisma.employee, "update", async () => employee);
+  const update = mock.method(prisma.employee, "update", async () => ({ ...employee, failedPinAttempts: 1000 }));
   const create = mock.method(prisma.managementSession, "create", async () => ({}));
   await assert.rejects(authenticateEmployee(employee.id, "5678"), { code: "ACCOUNT_LOCKED", status: 429 });
-  assert.ok(update.mock.calls[0].arguments[0]?.data.pinLockedUntil instanceof Date);
+  assert.deepEqual(update.mock.calls[0].arguments[0]?.data.failedPinAttempts, { increment: 1 });
+  assert.ok(update.mock.calls[1].arguments[0]?.data.pinLockedUntil instanceof Date);
   assert.equal(create.mock.callCount(), 0);
 });
 

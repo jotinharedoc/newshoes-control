@@ -40,7 +40,7 @@ export function AuthForm(props: Props) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5">
+    <form method="post" action={`/api/auth/${props.mode}`} onSubmit={submit} className="space-y-5">
       <fieldset disabled={pending} className="space-y-5 disabled:opacity-60">
         {props.mode === "login" && (
           <label className="block text-sm font-medium">
