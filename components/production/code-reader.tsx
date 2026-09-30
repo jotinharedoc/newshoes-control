@@ -1,5 +1,7 @@
 "use client";
 
+import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ActiveProduction } from "@/components/production/active-production";
@@ -145,8 +147,8 @@ clearForm();
 
     const normalizedCode = code.trim();
 
-    if (!/^\d{4,10}$/.test(normalizedCode)) {
-      setError("Informe um código com 4 a 10 números.");
+    if (!isValidShoeCode(normalizedCode)) {
+      setError(SHOE_CODE_ERROR);
       return;
     }
 
@@ -320,13 +322,14 @@ clearForm();
 
       <div>
         <label htmlFor="shoe-code" className="text-sm font-medium text-(--text-primary)">Código do tênis</label>
-        <input id="shoe-code" name="shoeCode" type="text" inputMode="numeric" pattern="[0-9]+" maxLength={10} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="Ex.: 1001693" className="auth-input" />
+        <input id="shoe-code" name="shoeCode" type="text" inputMode="numeric" pattern="[0-9]+" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Ex.: 1001693" className="auth-input" />
         <p className="mt-2 text-sm text-(--text-muted)">Leia pela câmera ou digite o código manualmente.</p>
+        {code && !isValidShoeCode(code) && <p role="alert" className="mt-2 text-sm text-(--text-secondary)">{SHOE_CODE_ERROR}</p>}
       </div>
 
       {error && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
 
-      <button type="button" onClick={() => setConfirming(true)} disabled={pending || !/^\d{4,10}$/.test(code)} className="primary-button w-full">
+      <button type="button" onClick={() => setConfirming(true)} disabled={pending || !isValidShoeCode(code)} className="primary-button w-full">
         Continuar
       </button>
 

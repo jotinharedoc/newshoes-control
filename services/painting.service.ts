@@ -1,3 +1,4 @@
+import { normalizeShoeCode } from "@/utils/shoe-code";
 import {
   Prisma,
   ProductionStatus,
@@ -141,23 +142,7 @@ export async function startPaintingProduction(
   employeeId: string,
   shoeCode: string,
 ) {
-  if (typeof shoeCode !== "string") {
-    throw new ProductionError(
-      "INVALID_INPUT",
-      "Informe o código do tênis.",
-      400,
-    );
-  }
-
-  const code = shoeCode.trim();
-
-  if (!/^\d{1,64}$/.test(code)) {
-    throw new ProductionError(
-      "INVALID_INPUT",
-      "Informe um código com 1 a 64 números.",
-      400,
-    );
-  }
+  const code = normalizeShoeCode(shoeCode);
 
   try {
     await runProductionTransaction(async (database) => {

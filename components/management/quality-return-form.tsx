@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
 
 type Candidate = {
   id: string;
@@ -72,8 +73,8 @@ export function QualityReturnForm() {
 
     const normalized = code.trim();
 
-    if (!/^\d{1,64}$/.test(normalized)) {
-      setError("Informe um código com 1 a 64 números.");
+    if (!isValidShoeCode(normalized)) {
+      setError(SHOE_CODE_ERROR);
       return;
     }
 
@@ -206,13 +207,12 @@ export function QualityReturnForm() {
             type="text"
             inputMode="numeric"
             autoComplete="off"
-            maxLength={64}
             required
             disabled={busy}
             value={code}
             onChange={(event) => {
               setCode(
-                event.target.value.replace(/\D/g, "").slice(0, 64),
+                event.target.value,
               );
               setSearched(false);
               setCandidates([]);
@@ -223,11 +223,12 @@ export function QualityReturnForm() {
             }}
             className="auth-input"
           />
+          {code && !isValidShoeCode(code) && <p role="alert" className="mt-2 text-sm text-(--text-secondary)">{SHOE_CODE_ERROR}</p>}
         </div>
 
         <button
           type="submit"
-          disabled={busy || !/^\d{1,64}$/.test(code)}
+          disabled={busy || !isValidShoeCode(code)}
           className="primary-button w-full disabled:opacity-50"
         >
           {busy ? "Aguarde..." : "Buscar serviços concluídos"}

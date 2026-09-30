@@ -1,3 +1,4 @@
+import { normalizeShoeCode } from "@/utils/shoe-code";
 import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { applyProductionBathroomAction, assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
 import {
@@ -26,20 +27,6 @@ import type {
   HygieneOverview,
   HygieneProductionView,
 } from "@/types/production.types";
-
-function normalizeShoeCode(value: string) {
-  const code = value.trim();
-
-  if (!/^\d{4,10}$/.test(code)) {
-    throw new ProductionError(
-      "INVALID_INPUT",
-      "Informe um código com 4 a 10 números.",
-      400,
-    );
-  }
-
-  return code;
-}
 
 function assertVersion(version: number) {
   if (!Number.isInteger(version) || version < 0) {

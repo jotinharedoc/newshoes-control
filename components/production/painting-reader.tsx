@@ -1,5 +1,7 @@
 "use client";
 
+import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
+
 import { useEffect, useRef, useState } from "react";
 
 import { CameraScanner } from "@/components/production/camera-scanner";
@@ -79,7 +81,7 @@ export function PaintingReader({
   const requestInProgress = useRef(false);
 
   const current = overview.current;
-  const validCode = /^\d{1,64}$/.test(code);
+  const validCode = isValidShoeCode(code);
 
   async function fetchOverview() {
     const response = await fetch("/api/production/painting", {
@@ -362,14 +364,14 @@ export function PaintingReader({
               type="text"
               inputMode="numeric"
               autoComplete="off"
-              maxLength={64}
               value={code}
               disabled={busy}
               onChange={(event) =>
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 64))
+                setCode(event.target.value)
               }
               className="auth-input"
             />
+            {code && !isValidShoeCode(code) && <p role="alert" className="mt-2 text-sm text-(--text-secondary)">{SHOE_CODE_ERROR}</p>}
           </div>
 
           <button

@@ -1,3 +1,4 @@
+import { normalizeShoeCode } from "@/utils/shoe-code";
 import {
   ProductionStatus,
   SessionEndReason,
@@ -71,25 +72,7 @@ export async function getEmployeeReturns(employeeId: string) {
 }
 
 export async function getQualityReturnCandidates(code: string) {
-  if (typeof code !== "string") {
-    throw new ProductionError(
-      "INVALID_INPUT",
-      "Informe o código do tênis.",
-      400,
-    );
-  }
-
-  const normalized = code.trim();
-
-  if (!/^\d{1,64}$/.test(normalized)) {
-    throw new ProductionError(
-      "INVALID_INPUT",
-      "Informe um código com 1 a 64 números.",
-      400,
-    );
-  }
-
-  return findReturnCandidates(normalized);
+  return findReturnCandidates(normalizeShoeCode(code));
 }
 
 // A API exige permissão de gerência antes de chamar esta função.

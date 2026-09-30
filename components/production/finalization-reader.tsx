@@ -1,5 +1,7 @@
 "use client";
 
+import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
+
 import { useEffect, useRef, useState } from "react";
 
 import { CameraScanner } from "@/components/production/camera-scanner";
@@ -123,7 +125,7 @@ export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
   const requestInProgress = useRef(false);
 
   const current = snapshot?.overview.current ?? null;
-  const validCode = /^\d{1,64}$/.test(code.trim());
+  const validCode = isValidShoeCode(code.trim());
 
   useEffect(() => {
     let cancelled = false;
@@ -193,7 +195,7 @@ export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
     if (requestInProgress.current || !snapshot) return;
 
     if (!validCode) {
-      setError("Informe um código com 1 a 64 números.");
+      setError(SHOE_CODE_ERROR);
       return;
     }
 
@@ -464,7 +466,6 @@ export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
-                maxLength={64}
                 value={code}
                 onChange={(event) => {
                   setCode(event.target.value);
@@ -477,7 +478,7 @@ export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
 
               {code && !validCode && (
                 <p className="text-sm text-(--text-secondary)">
-                  Informe somente números, com até 64 dígitos.
+                  {SHOE_CODE_ERROR}
                 </p>
               )}
 
