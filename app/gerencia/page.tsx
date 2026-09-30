@@ -1,3 +1,4 @@
+import { AdminNavigation } from "@/components/management/admin-navigation";
 import Link from "next/link";
 import { ProductivityPanel } from "@/components/management/productivity-panel";
 
@@ -172,6 +173,7 @@ export default async function ManagementPage({
             Alterar PIN
           </Link>
         </nav>
+        <AdminNavigation />
 
         <section className={panel}>
           <h2 className="text-lg font-semibold text-(--text-primary)">
@@ -518,11 +520,11 @@ export default async function ManagementPage({
 
             <section className={panel}>
               <h2 className="text-lg font-semibold text-(--text-primary)">
-                Intervalos de banheiro e almoço
+                Intervalos de banheiro, almoço e pausa operacional
               </h2>
 
               <p className="mt-2 text-sm text-(--text-secondary)">
-                Banheiro: {duration(data.totalBathroomMs)} · Almoço: {duration(data.totalLunchMs)} · Total: {duration(data.totalBreakMs)}. Estes
+                Banheiro: {duration(data.totalBathroomMs)} · Almoço: {duration(data.totalLunchMs)} · Pausa operacional: {duration(data.totalOperationalMs)} · Total: {duration(data.totalBreakMs)}. Estes
                 intervalos seguem o filtro de funcionário, independentemente
                 do processo escolhido.
               </p>
@@ -535,7 +537,7 @@ export default async function ManagementPage({
                   >
                     <span>
                       {item.employeeName} ·{" "}
-                      {item.kind === "BATHROOM" ? "Banheiro" : "Almoço"} ·{" "}
+                      {item.kind === "BATHROOM" ? "Banheiro" : item.kind === "OPERATIONAL" ? "Pausa operacional" : "Almoço"} ·{" "}
                       {dateFormatter.format(new Date(item.startedAt))}
                       {" → "}
                       {item.endedAt

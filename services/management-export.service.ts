@@ -33,9 +33,9 @@ export function addManagementMetricSheets(workbook: ExcelJS.Workbook, data: Mana
   general.getColumn(2).numFmt = "@";
   general.getColumn(9).numFmt = currencyFormat;
 
-  sheet("Metas Diárias", ["Data", "Funcionário", "Produções padrão", "Meta manhã (%)", "Meta tarde (%)", "Turnos com meta atingida", "Jornada (segundos)", "Tempo trabalhado (segundos)", "Banheiro (segundos)", "Almoço (segundos)", "Ociosidade estimada (segundos)"], metrics.daily.map(day => [
+  sheet("Metas Diárias", ["Data", "Funcionário", "Produções padrão", "Meta manhã (%)", "Meta tarde (%)", "Turnos com meta atingida", "Jornada (segundos)", "Tempo trabalhado (segundos)", "Banheiro (segundos)", "Almoço (segundos)", "Ociosidade estimada (segundos)", "Pausa operacional (segundos)"], metrics.daily.map(day => [
     day.day, day.employeeName, day.completedProductions, day.morningGoalPercent, day.afternoonGoalPercent, day.goalsAchieved,
-    day.expectedMs / 1000, day.workedMs / 1000, day.bathroomMs / 1000, day.lunchMs / 1000, day.idleMs === null ? null : day.idleMs / 1000,
+    day.expectedMs / 1000, day.workedMs / 1000, day.bathroomMs / 1000, day.lunchMs / 1000, day.idleMs === null ? null : day.idleMs / 1000, day.operationalMs / 1000,
   ]));
   sheet("Parâmetros", ["Regra", "Valor"], [
     ["Período inicial", date(data.period.start)], ["Período final (exclusivo)", date(data.period.endExclusive)],
@@ -47,6 +47,6 @@ export function addManagementMetricSheets(workbook: ExcelJS.Workbook, data: Mana
     ["Ociosidade", metrics.parameters.idleRule], ["Ociosidade não disponível", "Célula vazia: sem dia completo elegível ou com filtro de processo. Não equivale a zero."],
     ["Comissões", "Lançamentos históricos de CommissionEntry. Higienização/par 0,50; finalização/par 0,50; finalização/pé 0,25; pintura/par 1,00. Mudanças futuras não recalculam o passado."],
     ["Retornos", "Retrabalho interno; mantém comissão original e nunca gera nova comissão."],
-    ["Continuação", "Retomada do mesmo registro após adiamento; banheiro gera RESUME, não CONTINUATION."],
+    ["Continuação", "Retomada do mesmo registro após adiamento; banheiro e pausa operacional geram RESUME, não CONTINUATION."],
   ]);
 }

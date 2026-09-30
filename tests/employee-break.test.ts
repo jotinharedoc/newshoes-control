@@ -10,7 +10,7 @@ import { changeReturnState } from "../services/return.service";
 
 afterEach(() => mock.restoreAll());
 
-for (const kind of ["BATHROOM", "LUNCH"] as const) {
+for (const kind of ["BATHROOM", "LUNCH", "OPERATIONAL"] as const) {
   test(`funcionário operacional pode iniciar ${kind}`, async () => {
     fixture(null);
     const result = await startEmployeeBreak("employee", kind);
@@ -29,6 +29,7 @@ for (const kind of ["BATHROOM", "LUNCH"] as const) {
 
 // Novos registros em memória; nenhuma conexão com o banco da loja.
 function fixture(initialStatus: ProductionStatus | null) {
+  mock.method(prisma.managementCorrection, "create", async () => ({ id: "audit" }));
   mock.method(prisma.employee, "findFirst", async () => ({ id: "employee" }));
   const production = { id: "p1", status: initialStatus, version: 0, processTypeId: "process" };
   let current: { id: string; kind: EmployeeBreakKind; startedAt: Date; pausedProductionId: string | null } | null = null;
@@ -61,7 +62,7 @@ function fixture(initialStatus: ProductionStatus | null) {
   return { production, sessions, endings };
 }
 
-for (const kind of ["BATHROOM", "LUNCH"] as const) {
+for (const kind of ["BATHROOM", "LUNCH", "OPERATIONAL"] as const) {
   for (const status of [null, "IN_PROGRESS", "PAUSED"] as const) {
     test(`${kind} com trabalho ${status ?? "ausente"}: encerra sem comissão e aplica a retomada correta`, async () => {
       const state = fixture(status);
@@ -74,7 +75,7 @@ for (const kind of ["BATHROOM", "LUNCH"] as const) {
       const closed = await finishEmployeeBreak("employee", "b1");
       assert.equal(closed.current, null);
       assert.equal(state.production.status, status ? (kind === "LUNCH" ? "DEFERRED" : status) : null);
-      assert.deepEqual(state.sessions, kind === "BATHROOM" && status === "IN_PROGRESS" ? ["RESUME"] : []);
+      assert.deepEqual(state.sessions, kind !== "LUNCH" && status === "IN_PROGRESS" ? ["RESUME"] : []);
       await assert.rejects(finishEmployeeBreak("employee", "b1"), { code: "PRODUCTION_CONFLICT" });
     });
   }

@@ -1,8 +1,8 @@
 import type ExcelJS from "exceljs";
 import type { ManagementDashboardData } from "@/services/management.service";
 
-export const monthlyHeaders = ["Funcionário", "Qtd Hig.", "Qtd Fin.", "Qtd Fin (1 pé).", "Qtd Pin.", "Média Pares/Dia", "Tempo Médio Trab.", "Total Ocioso Mês", "Total Banheiro", "Total Almoço", "Metas Batidas (%)", "TOTAL A PAGAR"];
-export const employeeHeaders = ["Data", "Código do Tênis", "Tipo de Registro", "Processo", "Início", "Fim", "Tempo Gasto", "Valor a Receber", "Aux_Dia", "Tempo Ocioso Dia", "Meta Manhã (%)", "Meta Tarde (%)", "Pausa Banheiro", "Pausa Almoço"];
+export const monthlyHeaders = ["Funcionário", "Qtd Hig.", "Qtd Fin.", "Qtd Fin (1 pé).", "Qtd Pin.", "Média Pares/Dia", "Tempo Médio Trab.", "Total Ocioso Mês", "Total Banheiro", "Total Almoço", "Metas Batidas (%)", "TOTAL A PAGAR", "Total Pausa Operacional"];
+export const employeeHeaders = ["Data", "Código do Tênis", "Tipo de Registro", "Processo", "Início", "Fim", "Tempo Gasto", "Valor a Receber", "Aux_Dia", "Tempo Ocioso Dia", "Meta Manhã (%)", "Meta Tarde (%)", "Pausa Banheiro", "Pausa Almoço", "Pausa Operacional"];
 const dayMs = 86_400_000;
 const currency = '"R$ "#,##0.00';
 const duration = (ms: number | null) => ms === null ? null : ms / dayMs;
@@ -22,7 +22,7 @@ export function addManagementTemplateSheets(workbook: ExcelJS.Workbook, data: Ma
     });
     return sheet;
   }
-  const summary = table("Resumo Mensal", monthlyHeaders, [16,16,16,16,16,16,18.14,16,16,16,16,16]);
+  const summary = table("Resumo Mensal", monthlyHeaders, [16,16,16,16,16,16,18.14,16,16,16,16,16,22]);
   const employees = new Map([...data.byEmployee, ...data.metrics.byEmployee].map(employee => [employee.id, employee.name]));
   summary.getColumn(1).width = Math.max(16, Math.min(32, ...[...employees.values()].map(name => name.length + 2)));
   for (const [id, name] of employees) {
@@ -30,7 +30,7 @@ export function addManagementTemplateSheets(workbook: ExcelJS.Workbook, data: Ma
     const group = data.byEmployee.find(item => item.id === id);
     const row = summary.addRow([name, metric.hygienePairs, metric.finalizationPairs, metric.finalizationFeet, metric.paintingPairs,
       metric.averageProductionsPerDay, duration(metric.averageProductionMs), duration(metric.idleMs), duration(metric.bathroomMs), duration(metric.lunchMs),
-      metric.goalsAchievedPercent / 100, (group?.earnedCommissionCents ?? 0) / 100]);
+      metric.goalsAchievedPercent / 100, (group?.earnedCommissionCents ?? 0) / 100, duration(metric.operationalMs)]);
     row.alignment = { horizontal: "center", vertical: "middle" };
     row.getCell(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     row.getCell(8).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFCE4D6" } };
@@ -41,6 +41,7 @@ export function addManagementTemplateSheets(workbook: ExcelJS.Workbook, data: Ma
   for (const column of [8,9,10]) summary.getColumn(column).numFmt = "[hh]:mm";
   summary.getColumn(11).numFmt = "0%";
   summary.getColumn(12).numFmt = currency;
+  summary.getColumn(13).numFmt = "[hh]:mm";
 
   const config = workbook.addWorksheet("Configuracoes");
   config.columns = [{ width: 24 }, { width: 25 }, { width: 18 }];
@@ -68,7 +69,7 @@ export function addManagementTemplateSheets(workbook: ExcelJS.Workbook, data: Ma
       title = `${base.slice(0, 31 - tail.length)}${tail}`;
     }
     names.add(title.toLocaleLowerCase("pt-BR"));
-    const sheet = table(title, employeeHeaders, [8,20,15,22,15,15,15,15,15,15,15,15,15,15]);
+    const sheet = table(title, employeeHeaders, [8,20,15,22,15,15,15,15,15,15,15,15,15,15,22]);
     const entries = data.employeeExportRows.filter(row => row.employeeId === id);
     // Only the first Normal row receives the recorded commission. Continuations
     // outside the initial work period remain zero; the monthly total is unchanged.
@@ -91,7 +92,7 @@ export function addManagementTemplateSheets(workbook: ExcelJS.Workbook, data: Ma
           last ? duration(metric?.idleMs ?? null) : null,
           last && metric && metric.goalPeriods > 0 ? metric.morningGoalPercent / 100 : null,
           last && metric && metric.goalPeriods > 1 ? metric.afternoonGoalPercent / 100 : null,
-          last ? duration(metric?.bathroomMs ?? 0) : null, last ? duration(metric?.lunchMs ?? 0) : null]);
+          last ? duration(metric?.bathroomMs ?? 0) : null, last ? duration(metric?.lunchMs ?? 0) : null, last ? duration(metric?.operationalMs ?? 0) : null]);
         if (index === 0 && day !== days[0]) {
           for (let column = 1; column <= employeeHeaders.length; column++) {
             row.getCell(column).border = { top: { style: "thick", color: { argb: "FF000000" } } };
@@ -102,7 +103,7 @@ export function addManagementTemplateSheets(workbook: ExcelJS.Workbook, data: Ma
     sheet.getColumn(1).numFmt = "dd/mm";
     sheet.getColumn(2).numFmt = "@";
     for (const column of [5,6]) sheet.getColumn(column).numFmt = "hh:mm";
-    for (const column of [7,10,13,14]) sheet.getColumn(column).numFmt = "[hh]:mm";
+    for (const column of [7,10,13,14,15]) sheet.getColumn(column).numFmt = "[hh]:mm";
     sheet.getColumn(8).numFmt = currency;
     for (const column of [11,12]) sheet.getColumn(column).numFmt = "0%";
     if (sheet.rowCount > 1) {

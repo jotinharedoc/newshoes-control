@@ -256,6 +256,7 @@ export async function getManagementDashboard(
       (total, employeeBreak) => total + employeeBreak.durationMs,
       0,
     ),
+    totalOperationalMs: breakRows.reduce((total, item) => total + (item.kind === "OPERATIONAL" ? item.durationMs : 0), 0),
     totalLunchMs: breakRows.reduce(
       (total, employeeBreak) =>
         total +

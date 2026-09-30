@@ -17,6 +17,8 @@ type Break = { id: string; employeeId: string; kind: string; pausedProductionId:
 export function workflowFixture() {
   mock.method(prisma.employee, "findFirst", async () => ({ id: "workflow-employee" }));
   const employeeId = "workflow-employee";
+  const audits: Prisma.ManagementCorrectionCreateArgs[] = [];
+  mock.method(prisma.managementCorrection, "create", async (args: Prisma.ManagementCorrectionCreateArgs) => { audits.push(args); return { id: `audit-${audits.length}` }; });
   const records: WorkRecord[] = [];
   const breaks: Break[] = [];
   const commissions: { productionId: string; amount: string }[] = [];
@@ -126,5 +128,5 @@ export function workflowFixture() {
     for (const item of open) item.endedAt = args.data.endedAt as Date;
     return { count: open.length };
   });
-  return { employeeId, records, breaks, commissions };
+  return { employeeId, records, breaks, commissions, audits };
 }

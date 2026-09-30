@@ -1,3 +1,4 @@
+import { createAuditEvent } from "@/repositories/administration.repository";
 import {
   EmployeeBreakKind,
   Prisma,
@@ -55,7 +56,7 @@ export async function assertNoOpenEmployeeBreak(
 ) {
   const current = await findOpenEmployeeBreak(employeeId, database);
 
-  const resumingBathroom = current?.kind === EmployeeBreakKind.BATHROOM &&
+  const resumingBathroom = (current?.kind === EmployeeBreakKind.BATHROOM || current?.kind === EmployeeBreakKind.OPERATIONAL) &&
     current.pausedProductionId === resumingProductionId;
 
   if (current && !resumingBathroom) {
@@ -119,7 +120,7 @@ export async function applyProductionBathroomAction(
 
   if (action === "resume") {
     const current = await findOpenEmployeeBreak(employeeId, database);
-    if (current?.kind === EmployeeBreakKind.BATHROOM &&
+    if ((current?.kind === EmployeeBreakKind.BATHROOM || current?.kind === EmployeeBreakKind.OPERATIONAL) &&
         current.pausedProductionId === production.id) {
       await finishEmployeeBreak(employeeId, current.id, database);
       return true;
@@ -138,11 +139,12 @@ export async function startEmployeeBreak(
 ) {
   if (
     kind !== EmployeeBreakKind.LUNCH &&
-    kind !== EmployeeBreakKind.BATHROOM
+    kind !== EmployeeBreakKind.BATHROOM &&
+    kind !== EmployeeBreakKind.OPERATIONAL
   ) {
     throw new ProductionError(
       "INVALID_INPUT",
-      "Selecione almoço ou banheiro.",
+      "Selecione almoço, banheiro ou pausa operacional.",
       400,
     );
   }
@@ -212,13 +214,14 @@ export async function startEmployeeBreak(
         }
       }
 
-      await createEmployeeBreak(
+      const created = await createEmployeeBreak(
         employeeId,
         kind,
         shouldLinkProduction ? production!.id : null,
         now,
         database,
       );
+      if (kind === EmployeeBreakKind.OPERATIONAL) await createAuditEvent(database, { actorEmployeeId: employeeId, action: "OPERATIONAL_STARTED", targetType: "EMPLOYEE_BREAK", targetId: created.id, employeeBreakId: created.id, reason: "Pausa operacional iniciada", beforeData: {}, afterData: { kind, startedAt: now.toISOString(), pausedProductionId: shouldLinkProduction ? production!.id : null } });
     }, transaction);
   } catch (error) {
     handleDatabaseError(error);
@@ -256,7 +259,7 @@ export async function finishEmployeeBreak(
       const now = new Date();
 
       if (
-        current.kind === EmployeeBreakKind.BATHROOM &&
+        (current.kind === EmployeeBreakKind.BATHROOM || current.kind === EmployeeBreakKind.OPERATIONAL) &&
         current.pausedProductionId
       ) {
         const production = await findBreakProduction(
@@ -289,7 +292,8 @@ export async function finishEmployeeBreak(
           );
         }
 
-        const access = await findBreakProductionAccess(
+        const operational = await findOperationalBreakEmployee(employeeId, database);
+        const access = operational && await findBreakProductionAccess(
           employeeId,
           production.processTypeId,
           database,
@@ -336,6 +340,7 @@ export async function finishEmployeeBreak(
       // Almoço: o trabalho permanece DEFERRED.
       // Sem trabalho vinculado: encerra somente o intervalo.
       // Nenhum intervalo cria ou altera comissão.
+      if (current.kind === EmployeeBreakKind.OPERATIONAL) await createAuditEvent(database, { actorEmployeeId: employeeId, action: "OPERATIONAL_FINISHED", targetType: "EMPLOYEE_BREAK", targetId: current.id, employeeBreakId: current.id, reason: "Pausa operacional encerrada", beforeData: { kind: current.kind, startedAt: current.startedAt.toISOString(), endedAt: null }, afterData: { kind: current.kind, startedAt: current.startedAt.toISOString(), endedAt: now.toISOString() } });
     }, transaction);
   } catch (error) {
     handleDatabaseError(error);

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { EmployeeBreakOverview } from "@/services/employee-break.service";
 
-type BreakKind = "LUNCH" | "BATHROOM";
+type BreakKind = "LUNCH" | "BATHROOM" | "OPERATIONAL";
 
 type ApiError = {
   error?: {
@@ -226,12 +226,14 @@ function OperationalEmployeeBreakControl({
         setNotice(
           current.kind === "LUNCH"
             ? "Almoço encerrado. Os trabalhos deixados para depois podem ser continuados."
+            : current.kind === "OPERATIONAL" ? "Pausa operacional encerrada. O trabalho pausado por ela foi retomado se a autorização continua válida."
             : "Intervalo de banheiro encerrado. O trabalho pausado por ele foi retomado se a autorização continua válida.",
         );
       } else {
         setNotice(
           kind === "LUNCH"
             ? "Almoço registrado. Se havia trabalho ativo, ele ficou para depois."
+            : kind === "OPERATIONAL" ? "Pausa operacional registrada. Se havia trabalho em execução, o cronômetro foi pausado."
             : "Banheiro registrado. Se havia trabalho em execução, o cronômetro foi pausado.",
         );
       }
@@ -269,7 +271,7 @@ function OperationalEmployeeBreakControl({
               : current
                 ? current.kind === "LUNCH"
                   ? "Você está em horário de almoço."
-                  : "Você está em pausa banheiro."
+                  : current.kind === "OPERATIONAL" ? "Você está em pausa operacional." : "Você está em pausa banheiro."
                 : "Registre seu intervalo com ou sem tênis em execução."}
           </p>
         </div>
@@ -313,7 +315,7 @@ function OperationalEmployeeBreakControl({
               ? "Salvando..."
               : current.kind === "LUNCH"
                 ? "Voltei do almoço"
-                : "Voltei do banheiro"}
+                : current.kind === "OPERATIONAL" ? "Voltei da pausa operacional" : "Voltei do banheiro"}
           </button>
         ) : (
           <>
@@ -334,6 +336,7 @@ function OperationalEmployeeBreakControl({
             >
               Pausa almoço
             </button>
+            <button type="button" disabled={disabled} onClick={() => void send("OPERATIONAL")} className="rounded-xl border border-(--border-strong) px-4 py-3 font-semibold text-(--text-primary) disabled:opacity-50 sm:col-span-2">Pausa operacional</button>
           </>
         )}
       </div>

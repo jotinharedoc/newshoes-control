@@ -27,6 +27,7 @@ const labels: Record<string, string> = {
   PAUSE: "Pausa",
   LUNCH: "Almoço",
   BATHROOM: "Banheiro",
+  OPERATIONAL: "Pausa Operacional",
   SHIFT_END: "Fim do turno",
   NEXT_QR_SCAN: "Leitura do próximo código",
   MANUAL_COMPLETION: "Conclusão manual",
@@ -146,12 +147,13 @@ export function buildManagementWorkbook(data: ManagementDashboardData, options: 
       ["Status", "Estado atual da produção no momento da consulta."],
             [
         "Continuação",
-        "Trabalho retomado após almoço ou deixado para depois. Pausa banheiro não conta continuação.",
+        "Trabalho retomado após almoço ou deixado para depois. Pausa banheiro e pausa operacional não contam continuação.",
       ],
       ["Sessões", "Histórico das produções selecionadas; tempo contabilizado só dentro do período."],
-      ["Intervalos", "Banheiro e almoço seguem o funcionário e o período, independentemente do filtro de processo."],
+      ["Intervalos", "Banheiro, almoço e pausa operacional seguem o funcionário e o período, independentemente do filtro de processo."],
       ["Total de banheiro (segundos)", data.totalBathroomMs / 1000],
       ["Total de almoço (segundos)", data.totalLunchMs / 1000],
+      ["Total de pausa operacional (segundos)", data.totalOperationalMs / 1000],
       ["Total de intervalos (segundos)", data.totalBreakMs / 1000],
     ],
   );

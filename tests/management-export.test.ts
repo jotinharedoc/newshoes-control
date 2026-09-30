@@ -156,3 +156,23 @@ test("Excel atribui comissão à primeira linha Normal e separa os dias com bord
     assert.equal(sheet.getRow(4).getCell(column).border?.top, undefined);
   }
 });
+
+ test("pausa operacional aparece separada no XLSX e permanece na ociosidade", async () => {
+  const employee = { id: "op", name: "Operacional" };
+  mock.method(prisma.production, "findMany", async () => []);
+  mock.method(prisma.employeeBreak, "findMany", async () => [{ id: "pause", employee, kind: "OPERATIONAL", startedAt: new Date("2026-09-18T12:00:00Z"), endedAt: new Date("2026-09-18T13:00:00Z") }]);
+  mock.method(prisma.employee, "findMany", async () => []);
+  mock.method(prisma.processType, "findMany", async () => []);
+  const data = await getManagementDashboard({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
+  assert.equal(data.totalOperationalMs, 3_600_000); assert.equal(data.totalBreakMs, 3_600_000);
+  assert.equal(data.totalBathroomMs, 0); assert.equal(data.totalLunchMs, 0);
+  assert.equal(data.metrics.totals.idleMs, 8 * 3_600_000); assert.equal(data.metrics.totals.operationalMs, 3_600_000);
+  assert.equal(data.metrics.totals.averageProductionMs, 0);
+  const read = new ExcelJS.Workbook();
+  await read.xlsx.load(await buildManagementWorkbook(data, { startValue: "2026-09-18", endValue: "2026-09-18" }).xlsx.writeBuffer());
+  assert.equal(read.getWorksheet("Resumo Mensal")!.getCell("M1").value, "Total Pausa Operacional");
+  assert.equal(excelNumber(read.getWorksheet("Resumo Mensal")!.getCell("M2").value), 1 / 24);
+  assert.equal(read.getWorksheet("Operacional")!.getCell("O1").value, "Pausa Operacional");
+  assert.equal(excelNumber(read.getWorksheet("Operacional")!.getCell("O2").value), 1 / 24);
+  assert.equal(read.getWorksheet("Intervalos")!.getCell("C2").value, "Pausa Operacional");
+ });

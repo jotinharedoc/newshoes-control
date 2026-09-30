@@ -45,6 +45,7 @@ enum SessionEndReason {
 enum EmployeeBreakKind {
   LUNCH
   BATHROOM
+  OPERATIONAL
 }
 
 model Role {
@@ -228,6 +229,9 @@ model EmployeeBreak {
 }
 
 model ManagementCorrection {
+  action          String?
+  targetType      String?
+  targetId        String?
   id              String   @id @default(cuid())
   actorEmployeeId String
   reason          String
@@ -243,6 +247,8 @@ model ManagementCorrection {
   workSession   WorkSession?   @relation(fields: [workSessionId], references: [id], onDelete: Restrict)
   employeeBreak EmployeeBreak? @relation(fields: [employeeBreakId], references: [id], onDelete: Restrict)
 
+  @@index([action])
+  @@index([targetType, targetId])
   @@index([actorEmployeeId])
   @@index([productionId])
   @@index([workSessionId])

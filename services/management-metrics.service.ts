@@ -60,7 +60,7 @@ export function calculateManagementMetrics(
     return {
       employeeId: employee.id, employeeName: employee.name, day, weekday,
       ...emptyCounts(), morningGoalPercent: 0, afternoonGoalPercent: 0,
-      work: [] as Span[], bathroom: [] as Span[], lunch: [] as Span[],
+      work: [] as Span[], bathroom: [] as Span[], lunch: [] as Span[], operational: [] as Span[],
     };
   }
   function getDay(employee: { id: string; name: string }, day: string) {
@@ -69,7 +69,7 @@ export function calculateManagementMetrics(
     if (!entry) { entry = newDay(employee, day); days.set(key, entry); }
     return entry;
   }
-  function distribute(employee: { id: string; name: string }, from: Date, to: Date | null, kind: "work" | "bathroom" | "lunch") {
+  function distribute(employee: { id: string; name: string }, from: Date, to: Date | null, kind: "work" | "bathroom" | "lunch" | "operational") {
     let cursor = Math.max(from.getTime(), start);
     const stop = Math.min(to?.getTime() ?? now.getTime(), end);
     while (cursor < stop) {
@@ -103,16 +103,16 @@ export function calculateManagementMetrics(
     values.push(duration);
     completedDurations.set(production.employee.id, values);
   }
-  for (const item of breaks) distribute(item.employee, item.startedAt, item.endedAt, item.kind === "BATHROOM" ? "bathroom" : "lunch");
+  for (const item of breaks) distribute(item.employee, item.startedAt, item.endedAt, item.kind === "BATHROOM" ? "bathroom" : item.kind === "OPERATIONAL" ? "operational" : "lunch");
 
-  const daily = [...days.values()].map(({ work, bathroom, lunch, ...day }) => {
+  const daily = [...days.values()].map(({ work, bathroom, lunch, operational, ...day }) => {
     const expectedMs = (config.dailyHours[day.weekday] ?? 0) * 3_600_000;
     const completeDay = start <= midnight(day.day) && end >= midnight(nextDay(day.day));
     // A process filter cannot measure employee idle time: other processes are omitted.
     const idleMs = !filters.processTypeId && completeDay && expectedMs > 0
       ? Math.max(0, expectedMs - unionMs([...work, ...bathroom, ...(config.deductLunchFromIdle ? lunch : [])]))
       : null;
-    return { ...day, expectedMs, workedMs: unionMs(work), bathroomMs: unionMs(bathroom), lunchMs: unionMs(lunch), idleMs,
+    return { ...day, expectedMs, workedMs: unionMs(work), bathroomMs: unionMs(bathroom), lunchMs: unionMs(lunch), operationalMs: unionMs(operational), idleMs,
       goalPeriods: day.weekday === 0 ? 0 : day.weekday === 6 ? 1 : 2,
       goalsAchieved: day.weekday === 0 ? 0 : Number(day.morningGoalPercent >= 100 - 1e-8) + (day.weekday === 6 ? 0 : Number(day.afternoonGoalPercent >= 100 - 1e-8)),
     };
@@ -131,6 +131,7 @@ export function calculateManagementMetrics(
       averageProductionsPerDay: activeDays ? counts.completedProductions / activeDays : 0,
       averageProductionMs: durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,
       bathroomMs: selected.reduce((sum, d) => sum + d.bathroomMs, 0),
+      operationalMs: selected.reduce((sum, d) => sum + d.operationalMs, 0),
       lunchMs: selected.reduce((sum, d) => sum + d.lunchMs, 0),
       idleMs: eligible.length ? eligible.reduce((sum, d) => sum + (d.idleMs ?? 0), 0) : null,
       idleDays: eligible.length,
@@ -152,7 +153,7 @@ export function calculateManagementMetrics(
       averageRule: "Produções padrão concluídas / dias com trabalho, conclusão ou intervalo registrado. Retornos não entram na quantidade.",
       durationRule: "Média do tempo total das sessões de produções padrão concluídas no período, incluindo sessões de dias anteriores.",
       goalRule: "Contribuições por produção padrão somadas no turno da conclusão, no horário de São Paulo. Metas Batidas é a proporção dos turnos com pelo menos 100%: dois turnos por dia útil com atividade, somente manhã no sábado e nenhum no domingo.",
-      idleRule: `Estimativa apenas em dias completos com atividade registrada: jornada menos trabalho, banheiro${config.deductLunchFromIdle ? " e almoço" : ""}, mínimo zero. Sem dados de presença, dias sem registro não contam. Indisponível com filtro de processo ou dia ainda em curso. Intervalos sobrepostos descontam uma única vez.`,
+      idleRule: `Estimativa apenas em dias completos com atividade registrada: jornada menos trabalho, banheiro${config.deductLunchFromIdle ? " e almoço" : ""}, mínimo zero. Sem dados de presença, dias sem registro não contam. Indisponível com filtro de processo ou dia ainda em curso. Pausa operacional permanece na ociosidade estimada e não é trabalho produtivo. Intervalos sobrepostos descontam uma única vez.`,
     },
   };
 }

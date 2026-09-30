@@ -43,7 +43,7 @@ async function prepareReturn(state: State, code: string) {
 }
 
 for (const flow of flows) {
-  for (const kind of ["BATHROOM", "LUNCH"] as const) {
+  for (const kind of ["BATHROOM", "LUNCH", "OPERATIONAL"] as const) {
     test(`${flow}: ${kind} registra intervalo, preserva duração e aplica RESUME/CONTINUATION`, async () => {
       mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-22T12:00:00Z") });
       const state = workflowFixture();
@@ -58,21 +58,24 @@ for (const flow of flows) {
       assert.equal(state.breaks.length, 1);
       assert.equal(state.breaks[0].pausedProductionId, record.id);
       assert.equal(state.breaks[0].kind, kind);
-      assert.equal(record.status, kind === "BATHROOM" ? "PAUSED" : "DEFERRED");
+      assert.equal(record.status, kind !== "LUNCH" ? "PAUSED" : "DEFERRED");
       assert.equal(record.sessions[0].endedAt!.getTime() - record.sessions[0].startedAt.getTime(), 120_000);
       assert.equal(state.commissions.length, originalCommissions);
       await assert.rejects(change(state, record, "finish"), { code: "INVALID_PRODUCTION_STATE" });
 
       mock.timers.tick(kind === "BATHROOM" ? 600_000 : 3_600_000);
       if (kind === "BATHROOM") await change(state, record, "resume");
-      else {
+      else if (kind === "OPERATIONAL") {
+        await finishEmployeeBreak(state.employeeId, state.breaks[0].id);
+        assert.deepEqual(state.audits.map(a => a.data.action), ["OPERATIONAL_STARTED", "OPERATIONAL_FINISHED"]);
+      } else {
         await finishEmployeeBreak(state.employeeId, state.breaks[0].id);
         assert.equal(record.status, "DEFERRED");
         assert.equal(record.sessions.filter(s => !s.endedAt).length, 0);
         await change(state, record, "continue");
       }
       assert.ok(state.breaks[0].endedAt);
-      assert.equal(record.sessions.at(-1)?.kind, kind === "BATHROOM" ? "RESUME" : "CONTINUATION");
+      assert.equal(record.sessions.at(-1)?.kind, kind !== "LUNCH" ? "RESUME" : "CONTINUATION");
       assert.equal(state.records.length, originalCount);
       mock.timers.tick(180_000);
       await change(state, record, "finish");

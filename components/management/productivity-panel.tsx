@@ -19,7 +19,7 @@ export function ProductivityPanel({ metrics }: { metrics: ManagementDashboardDat
           ["Finalizações de 1 pé", totals.finalizationFeet], ["Pinturas", totals.paintingPairs],
           ["Produções por dia com atividade", number(totals.averageProductionsPerDay)],
           ["Tempo médio por produção", duration(totals.averageProductionMs)],
-          ["Banheiro", duration(totals.bathroomMs)], ["Almoço", duration(totals.lunchMs)],
+          ["Banheiro", duration(totals.bathroomMs)], ["Almoço", duration(totals.lunchMs)], ["Pausa operacional", duration(totals.operationalMs)],
           ["Ociosidade estimada — dias completos", duration(totals.idleMs)],
         ].map(([label, value]) => <div key={label}>
           <dt className="text-sm text-(--text-secondary)">{label}</dt>
@@ -43,6 +43,7 @@ export function ProductivityPanel({ metrics }: { metrics: ManagementDashboardDat
                 ["Produções/dia com atividade", number(item.averageProductionsPerDay)],
                 ["Tempo médio por produção", duration(item.averageProductionMs)],
                 ["Ociosidade estimada", duration(item.idleMs)],
+                ["Banheiro", duration(item.bathroomMs)], ["Almoço", duration(item.lunchMs)], ["Pausa operacional", duration(item.operationalMs)],
               ].map(([label, value]) => <div key={label} className="flex justify-between gap-3"><dt>{label}</dt><dd className="text-right font-medium">{value}</dd></div>)}
             </dl>
           </article>)}

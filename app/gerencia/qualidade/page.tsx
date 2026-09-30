@@ -1,3 +1,4 @@
+import { AdminNavigation } from "@/components/management/admin-navigation";
 import Link from "next/link";
 
 import { QualityReturnForm } from "@/components/management/quality-return-form";
@@ -24,6 +25,7 @@ export default async function QualityPage() {
             {employee.name}
           </p>
         </header>
+        <AdminNavigation />
 
         <section className="rounded-[28px] border border-(--border) bg-(--surface) p-6 sm:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-(--brand)">

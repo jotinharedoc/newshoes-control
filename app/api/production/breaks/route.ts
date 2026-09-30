@@ -25,7 +25,8 @@ function json(data: unknown) {
 function isBreakKind(value: unknown): value is EmployeeBreakKind {
   return (
     value === EmployeeBreakKind.LUNCH ||
-    value === EmployeeBreakKind.BATHROOM
+    value === EmployeeBreakKind.BATHROOM ||
+    value === EmployeeBreakKind.OPERATIONAL
   );
 }
 
