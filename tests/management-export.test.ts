@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 import ExcelJS from "exceljs";
 import { prisma } from "./fake-prisma";
-import { getManagementDashboard } from "../services/management.service";
+import { getManagementExport } from "../services/management.service";
 import { buildManagementWorkbook } from "../services/management-workbook.service";
 import type { ManagementProductionRecord } from "../repositories/management.repository";
 import { employeeHeaders, monthlyHeaders } from "../services/management-template-export.service";
@@ -30,7 +30,7 @@ test("Excel reutiliza as métricas, preserva zeros, comissão original e abas in
   mock.method(prisma.employeeBreak, "findMany", async () => []);
   mock.method(prisma.employee, "findMany", async () => []);
   mock.method(prisma.processType, "findMany", async () => []);
-  const data = await getManagementDashboard({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
+  const data = await getManagementExport({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
   assert.equal(data.totals.completedReturns, 1);
   assert.equal(data.totals.earnedCommissionCents, 50);
   assert.equal(data.totals.productionsWithContinuation, 3);
@@ -83,7 +83,7 @@ test("modelo agosto: códigos longos/texto, rótulos, durações e totais diári
   ]);
   mock.method(prisma.employee, "findMany", async () => []);
   mock.method(prisma.processType, "findMany", async () => []);
-  const data = await getManagementDashboard({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
+  const data = await getManagementExport({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
   const workbook = buildManagementWorkbook(data, { startValue: "2026-09-18", endValue: "2026-09-18" });
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
@@ -140,7 +140,7 @@ test("Excel atribui comissão à primeira linha Normal e separa os dias com bord
   mock.method(prisma.employeeBreak, "findMany", async () => []);
   mock.method(prisma.employee, "findMany", async () => []);
   mock.method(prisma.processType, "findMany", async () => []);
-  const data = await getManagementDashboard({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-20T03:00:00Z") });
+  const data = await getManagementExport({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-20T03:00:00Z") });
   const before = JSON.stringify(data);
   const workbook = buildManagementWorkbook(data, { startValue: "2026-09-18", endValue: "2026-09-19" });
   const read = new ExcelJS.Workbook();
@@ -157,16 +157,16 @@ test("Excel atribui comissão à primeira linha Normal e separa os dias com bord
   }
 });
 
- test("pausa operacional aparece separada no XLSX e permanece na ociosidade", async () => {
+ test("pausa operacional aparece separada no XLSX e é descontada da ociosidade", async () => {
   const employee = { id: "op", name: "Operacional" };
   mock.method(prisma.production, "findMany", async () => []);
   mock.method(prisma.employeeBreak, "findMany", async () => [{ id: "pause", employee, kind: "OPERATIONAL", startedAt: new Date("2026-09-18T12:00:00Z"), endedAt: new Date("2026-09-18T13:00:00Z") }]);
   mock.method(prisma.employee, "findMany", async () => []);
   mock.method(prisma.processType, "findMany", async () => []);
-  const data = await getManagementDashboard({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
+  const data = await getManagementExport({ start: new Date("2026-09-18T03:00:00Z"), endExclusive: new Date("2026-09-19T03:00:00Z") });
   assert.equal(data.totalOperationalMs, 3_600_000); assert.equal(data.totalBreakMs, 3_600_000);
   assert.equal(data.totalBathroomMs, 0); assert.equal(data.totalLunchMs, 0);
-  assert.equal(data.metrics.totals.idleMs, 8 * 3_600_000); assert.equal(data.metrics.totals.operationalMs, 3_600_000);
+  assert.equal(data.metrics.totals.idleMs, 7 * 3_600_000); assert.equal(data.metrics.totals.operationalMs, 3_600_000);
   assert.equal(data.metrics.totals.averageProductionMs, 0);
   const read = new ExcelJS.Workbook();
   await read.xlsx.load(await buildManagementWorkbook(data, { startValue: "2026-09-18", endValue: "2026-09-18" }).xlsx.writeBuffer());

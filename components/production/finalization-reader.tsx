@@ -34,6 +34,7 @@ type Snapshot = {
 
 type Props = {
   canUseBreaks: boolean;
+  initialOverview: Overview;
   employeeName: string;
 };
 
@@ -59,7 +60,7 @@ const actionMessages: Record<Action, string> = {
   resume: "Produção retomada após a pausa.",
   defer: "Produção salva para continuar depois.",
   continue: "Continuação iniciada. Outros trabalhos abertos ficaram para depois.",
-  finish: "Finalização concluída e comissão registrada.",
+  finish: "Finalização concluída.",
 };
 
 async function requestOverview(
@@ -111,8 +112,8 @@ function unitLabel(unit: Unit) {
   return options.find((option) => option.value === unit)?.label ?? unit;
 }
 
-export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+export function FinalizationReader({ employeeName, canUseBreaks, initialOverview }: Props) {
+  const [snapshot, setSnapshot] = useState<Snapshot>({ overview: initialOverview, receivedAt: initialOverview.current ? Date.parse(initialOverview.current.observedAt) : 0 });
   const [clock, setClock] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -126,27 +127,6 @@ export function FinalizationReader({ employeeName, canUseBreaks }: Props) {
 
   const current = snapshot?.overview.current ?? null;
   const validCode = isValidShoeCode(code.trim());
-
-  useEffect(() => {
-    let cancelled = false;
-
-    requestOverview("GET")
-      .then((nextSnapshot) => {
-        if (cancelled) return;
-
-        setSnapshot(nextSnapshot);
-        setClock(nextSnapshot.receivedAt);
-      })
-      .catch((failure: unknown) => {
-        if (!cancelled) {
-          setError(errorMessage(failure));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (current?.status !== "IN_PROGRESS") return;

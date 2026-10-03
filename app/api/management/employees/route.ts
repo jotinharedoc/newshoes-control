@@ -1,7 +1,7 @@
 import { readJsonObject, readSessionToken } from "@/lib/auth-http";
 import { administrationError, administrationJson } from "@/lib/administration-http";
 import { requireAccess } from "@/services/auth.service";
-import { resetAdministrationPin, saveAdministrationEmployee } from "@/services/administration.service";
+import { changeEmployeeAvailability, resetAdministrationPin, saveAdministrationEmployee } from "@/services/administration.service";
 import { administrationOptions, listAdministrationEmployees } from "@/repositories/administration.repository";
 import { MANAGEMENT_PERMISSION } from "@/utils/access";
 import { AuthError } from "@/types/auth.types";
@@ -26,6 +26,7 @@ export async function PATCH(request: Request) {
     const body = await readJsonObject(request);
     if (typeof body.id !== "string" || !body.id) throw new AuthError("INVALID_INPUT", "Selecione um funcionário.", 400);
     if (body.action === "reset-pin") return administrationJson(await resetAdministrationPin(actor.id, body.id, body.pin ?? "0000"));
+    if (body.action === "remove" || body.action === "restore") return administrationJson(await changeEmployeeAvailability(actor.id, body.id, body.action === "restore"));
     if (body.action !== "update") throw new AuthError("INVALID_INPUT", "Ação inválida.", 400);
     return administrationJson(await saveAdministrationEmployee(actor.id, body, body.id));
   } catch (error) { return administrationError(error); }

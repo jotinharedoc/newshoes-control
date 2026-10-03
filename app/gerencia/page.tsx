@@ -10,6 +10,7 @@ import { MANAGEMENT_PERMISSION } from "@/utils/access";
 export const dynamic = "force-dynamic";
 
 type SearchParams = {
+  page?: string | string[];
   start?: string | string[];
   end?: string | string[];
   employeeId?: string | string[];
@@ -127,9 +128,12 @@ export default async function ManagementPage({
           endExclusive: new Date(end.getTime() + 24 * 60 * 60 * 1000),
           employeeId: employeeId || undefined,
           processTypeId: processTypeId || undefined,
-        })
+        }, Number(single(params.page)) || 1)
       : null;
 
+  function pageHref(page: number) {
+    return `/gerencia?${new URLSearchParams({ start: startValue, end: endValue, employeeId, processTypeId, page: String(page) })}`;
+  }
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -403,6 +407,11 @@ export default async function ManagementPage({
               <h2 className="text-lg font-semibold text-(--text-primary)">
                 Registros de produção
               </h2>
+              <nav aria-label="Páginas dos registros" className="mt-3 flex flex-wrap gap-4 text-sm">
+                {data.pagination.page > 1 && <Link className="underline" href={pageHref(data.pagination.page - 1)}>Anterior</Link>}
+                <span>Página {data.pagination.page} de {data.pagination.totalPages} · {data.pagination.totalRecords} registros · 50 por página</span>
+                {data.pagination.page < data.pagination.totalPages && <Link className="underline" href={pageHref(data.pagination.page + 1)}>Próxima</Link>}
+              </nav>
 
               <p className="mt-2 text-sm text-(--text-secondary)">
                 Inclui registros com atividade no período. O status exibido

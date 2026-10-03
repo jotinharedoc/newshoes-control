@@ -1,3 +1,4 @@
+import { productionCommission } from "@/utils/production-commission";
 import { normalizeShoeCode } from "@/utils/shoe-code";
 import {
   Prisma,
@@ -66,7 +67,7 @@ async function requireFinalizationAccess(
     );
   }
 
-  return access.processType;
+  return { ...access.processType, rules: access.processType.rules.map(rule => ({ ...rule, commissionAmount: productionCommission(rule.commissionAmount, access) })) };
 }
 
 function toView(

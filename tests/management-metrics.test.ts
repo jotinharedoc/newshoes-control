@@ -110,3 +110,15 @@ test("configuração de metas é central, agregados por funcionário permanecem 
   assert.equal(data.totals.morningGoalPercent, 75);
   assert.equal(data.totals.averageProductionsPerDay, 2);
 });
+
+test("pausa operacional justificada desconta ociosidade sem duplicar sobreposições", () => {
+  const pauses = [
+    { employee, kind: "OPERATIONAL", startedAt: new Date("2026-09-18T12:00:00Z"), endedAt: new Date("2026-09-18T14:00:00Z") },
+    { employee, kind: "BATHROOM", startedAt: new Date("2026-09-18T13:00:00Z"), endedAt: new Date("2026-09-18T14:00:00Z") },
+  ];
+  const data = calculateManagementMetrics([], pauses, filters, now);
+  assert.equal(data.totals.operationalMs, 2 * hour);
+  assert.equal(data.totals.idleMs, 6 * hour);
+  assert.equal(data.daily[0].workedMs, 0);
+  assert.equal(calculateManagementMetrics([], pauses, { ...filters, processTypeId: "h" }, now).totals.idleMs, null);
+});

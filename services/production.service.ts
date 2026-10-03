@@ -1,3 +1,4 @@
+import { productionCommission } from "@/utils/production-commission";
 import { normalizeShoeCode } from "@/utils/shoe-code";
 import { prepareWorkSwitch } from "@/services/work-switch.service";
 import { applyProductionBathroomAction, assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
@@ -62,7 +63,7 @@ async function requireHygieneAccess(
     );
   }
 
-  return { processType: access.processType, rule };
+  return { processType: access.processType, rule: { ...rule, commissionAmount: productionCommission(rule.commissionAmount, access) } };
 }
 
 function toProductionView(

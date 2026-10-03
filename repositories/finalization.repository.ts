@@ -39,6 +39,7 @@ export function findFinalizationAccess(
       },
     },
     select: {
+      employee: { select: { role: { select: { permissions: { select: { permission: { select: { code: true } } } } } } } },
       processType: {
         select: {
           id: true,

@@ -73,6 +73,9 @@ export async function saveEmployeeRecord(db: Prisma.TransactionClient, data: { n
 export function revokeEmployeeSessions(db: Prisma.TransactionClient, employeeId: string) {
   return db.managementSession.updateMany({ where: { employeeId, revokedAt: null }, data: { revokedAt: new Date() } });
 }
+export function setEmployeeActive(db: Prisma.TransactionClient, id: string, active: boolean) {
+  return db.employee.update({ where: { id }, data: { active }, select: publicEmployeeSelect });
+}
 export function resetEmployeeCredentials(db: Prisma.TransactionClient, id: string, pinHash: string) {
   return db.employee.update({ where: { id }, data: { pinHash, mustChangePin: true, failedPinAttempts: 0, pinLockedUntil: null }, select: { id: true } });
 }

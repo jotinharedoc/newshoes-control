@@ -1,5 +1,5 @@
 import { requirePageAccess } from "@/lib/auth-page";
-import { getManagementDashboard } from "@/services/management.service";
+import { getManagementExport } from "@/services/management.service";
 import { buildManagementWorkbook } from "@/services/management-workbook.service";
 import { MANAGEMENT_PERMISSION } from "@/utils/access";
 
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const employeeId = params.get("employeeId") || undefined;
   const processTypeId = params.get("processTypeId") || undefined;
 
-  const data = await getManagementDashboard({
+  const data = await getManagementExport({
     start,
     endExclusive: new Date(end.getTime() + dayMs),
     employeeId,

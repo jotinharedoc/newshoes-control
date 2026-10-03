@@ -97,6 +97,74 @@ test("administração e pausa operacional no PostgreSQL local", { skip: process.
       assert.equal(await prisma.managementCorrection.count({ where: { employeeBreakId: opened.id } }), 2);
       await assert.rejects(b.startEmployeeBreak(manager.id, "OPERATIONAL"), { status: 403 });
     });
+    await t.test("remover revoga acesso sem alterar histórico; restaurar conserva identidade", async () => {
+      const history = await prisma.production.findMany({ where: { employeeId: workerId }, include: { sessions: true, commission: true, pausedByBreaks: true }, orderBy: { id: "asc" } });
+      const login = await auth.authenticateEmployee(workerId, "5678");
+      await admin.changeEmployeeAvailability(manager.id, workerId, false);
+      await assert.rejects(auth.authenticateEmployee(workerId, "5678"), { status: 401 });
+      assert.equal(await prisma.managementSession.count({ where: { employeeId: workerId, revokedAt: null } }), 0);
+      await assert.rejects(h.startHygieneProduction(workerId, "00012300999"), { status: 403 });
+      await admin.changeEmployeeAvailability(manager.id, workerId, true);
+      assert.equal((await auth.authenticateEmployee(workerId, "5678")).destination, "/producao");
+      assert.deepEqual(await prisma.production.findMany({ where: { employeeId: workerId }, include: { sessions: true, commission: true, pausedByBreaks: true }, orderBy: { id: "asc" } }), history);
+      assert.ok(login);
+      const audits = await prisma.managementCorrection.findMany({ where: { targetId: workerId, action: { in: ["EMPLOYEE_REMOVED", "EMPLOYEE_RESTORED"] } } });
+      assert.equal(audits.length, 2);
+      await assert.rejects(admin.changeEmployeeAvailability(manager.id, manager.id, false), { status: 400 });
+    });
+    await t.test("gerente somente produz nos processos atribuídos, sem comissão nova; histórico preservado", async () => {
+      const finalization = await import("../services/finalization.service");
+      const painting = await import("../services/painting.service");
+      const processes = await prisma.processType.findMany({ where: { name: { in: ["Higienização", "Finalização", "Pintura"] } } });
+      const code = () => `0${randomInt(1e10, 9e10)}`;
+      await assert.rejects(h.startHygieneProduction(manager.id, code()), { status: 403 });
+      await assert.rejects(finalization.startFinalizationProduction(manager.id, code(), "PAIR"), { status: 403 });
+      await assert.rejects(painting.startPaintingProduction(manager.id, code()), { status: 403 });
+      await admin.saveAdministrationEmployee(manager.id, { name: manager.name, roleId: managerRole.id, active: true, processIds: processes.map(p => p.id) }, manager.id);
+      for (const flow of ["h", "f", "left", "p"]) {
+        const started = flow === "h" ? await h.startHygieneProduction(manager.id, code())
+          : flow === "p" ? await painting.startPaintingProduction(manager.id, code())
+          : await finalization.startFinalizationProduction(manager.id, code(), flow === "left" ? "LEFT_FOOT" : "PAIR");
+        const current = started.current!;
+        if (flow === "h") await h.changeHygieneProductionState(manager.id, current.id, current.version, "finish");
+        else if (flow === "p") await painting.changePaintingProductionState(manager.id, current.id, current.version, "finish");
+        else await finalization.changeFinalizationProductionState(manager.id, current.id, current.version, "finish");
+        const saved = await prisma.production.findUniqueOrThrow({ where: { id: current.id }, include: { commission: true, sessions: true } });
+        assert.equal(saved.status, "COMPLETED"); assert.equal(saved.commissionAmountSnapshot.toNumber(), 0);
+        assert.equal(saved.commission?.amount.toNumber() ?? 0, 0); assert.equal(saved.sessions.length, 1);
+      }
+      for (const kind of ["BATHROOM", "LUNCH", "OPERATIONAL"] as const) await assert.rejects(b.startEmployeeBreak(manager.id, kind), { status: 403 });
+      const before = await prisma.production.findMany({ where: { employeeId: workerId }, include: { commission: true }, orderBy: { id: "asc" } });
+      await admin.saveAdministrationEmployee(manager.id, { ...input, roleId: managerRole.id }, workerId);
+      assert.deepEqual(await prisma.production.findMany({ where: { employeeId: workerId }, include: { commission: true }, orderBy: { id: "asc" } }), before);
+      await admin.saveAdministrationEmployee(manager.id, input, workerId);
+    });
+    await t.test("estoque: catálogo vazio não é preenchido, permissões, estados, contagem e auditoria", async () => {
+      const stock = await import("../services/stock.service");
+      const item = await prisma.stockItem.create({ data: { name: prefix } });
+      try {
+        await assert.rejects(stock.createStockRequest(workerId, { stockItemId: "missing" }), { status: 400 });
+        const request = await stock.createStockRequest(workerId, { stockItemId: item.id, quantity: "2.50", note: "observação privada de teste" });
+        assert.equal((await stock.listStockRequests(workerId)).pendingStockRequests, 1);
+        assert.equal((await stock.listStockRequests(manager.id, { status: "PENDING" })).requests.some(row => row.id === request.id), true);
+        await assert.rejects(stock.changeStockRequestStatus(workerId, request.id, "APPROVED"), { status: 403 });
+        for (const status of ["APPROVED", "ORDERED", "RECEIVED"]) await stock.changeStockRequestStatus(manager.id, request.id, status);
+        assert.equal((await stock.listStockRequests(workerId)).pendingStockRequests, 0);
+        await assert.rejects(stock.changeStockRequestStatus(manager.id, request.id, "PENDING"), { status: 409 });
+        const handled = await prisma.stockRequest.findUniqueOrThrow({ where: { id: request.id } });
+        assert.equal(handled.handledByEmployeeId, manager.id); assert.ok(handled.handledAt);
+        const audits = await prisma.managementCorrection.findMany({ where: { targetId: request.id } });
+        assert.equal(audits.length, 4); assert.ok(!JSON.stringify(audits).includes("observação privada"));
+        await prisma.stockItem.update({ where: { id: item.id }, data: { active: false } });
+        await assert.rejects(stock.createStockRequest(workerId, { stockItemId: item.id }), { status: 400 });
+        await admin.changeEmployeeAvailability(manager.id, workerId, false);
+        await assert.rejects(stock.listStockRequests(workerId), { status: 403 });
+        await admin.changeEmployeeAvailability(manager.id, workerId, true);
+      } finally {
+        await prisma.stockRequest.deleteMany({ where: { stockItemId: item.id } });
+        await prisma.stockItem.delete({ where: { id: item.id } });
+      }
+    });
   } finally {
     if (restoreRule) await prisma.processRule.update({ where: { id: restoreRule.id }, data: { commissionAmount: restoreRule.amount } });
     const owned = await prisma.production.findMany({ where: { employeeId: { in: employees } }, select: { id: true, shoeId: true } });

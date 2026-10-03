@@ -110,7 +110,7 @@ export function calculateManagementMetrics(
     const completeDay = start <= midnight(day.day) && end >= midnight(nextDay(day.day));
     // A process filter cannot measure employee idle time: other processes are omitted.
     const idleMs = !filters.processTypeId && completeDay && expectedMs > 0
-      ? Math.max(0, expectedMs - unionMs([...work, ...bathroom, ...(config.deductLunchFromIdle ? lunch : [])]))
+      ? Math.max(0, expectedMs - unionMs([...work, ...bathroom, ...operational, ...(config.deductLunchFromIdle ? lunch : [])]))
       : null;
     return { ...day, expectedMs, workedMs: unionMs(work), bathroomMs: unionMs(bathroom), lunchMs: unionMs(lunch), operationalMs: unionMs(operational), idleMs,
       goalPeriods: day.weekday === 0 ? 0 : day.weekday === 6 ? 1 : 2,
@@ -153,7 +153,7 @@ export function calculateManagementMetrics(
       averageRule: "Produções padrão concluídas / dias com trabalho, conclusão ou intervalo registrado. Retornos não entram na quantidade.",
       durationRule: "Média do tempo total das sessões de produções padrão concluídas no período, incluindo sessões de dias anteriores.",
       goalRule: "Contribuições por produção padrão somadas no turno da conclusão, no horário de São Paulo. Metas Batidas é a proporção dos turnos com pelo menos 100%: dois turnos por dia útil com atividade, somente manhã no sábado e nenhum no domingo.",
-      idleRule: `Estimativa apenas em dias completos com atividade registrada: jornada menos trabalho, banheiro${config.deductLunchFromIdle ? " e almoço" : ""}, mínimo zero. Sem dados de presença, dias sem registro não contam. Indisponível com filtro de processo ou dia ainda em curso. Pausa operacional permanece na ociosidade estimada e não é trabalho produtivo. Intervalos sobrepostos descontam uma única vez.`,
+      idleRule: `Estimativa apenas em dias completos com atividade registrada: jornada menos trabalho, banheiro${config.deductLunchFromIdle ? ", almoço" : ""} e pausa operacional, mínimo zero. Sem dados de presença, dias sem registro não contam. Indisponível com filtro de processo ou dia ainda em curso. Pausa operacional é tempo justificado: desconta da ociosidade e não é trabalho produtivo. Intervalos sobrepostos descontam uma única vez.`,
     },
   };
 }

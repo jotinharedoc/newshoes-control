@@ -78,6 +78,8 @@ model RolePermission {
 }
 
 model Employee {
+  stockRequests      StockRequest[] @relation("StockRequester")
+  handledStockRequests StockRequest[] @relation("StockHandler")
   id                 String                 @id @default(cuid())
   name               String
   active             Boolean                @default(true)
@@ -265,4 +267,43 @@ model CommissionEntry {
   createdAt    DateTime   @default(now())
 
   @@index([earnedAt])
+}
+
+enum StockRequestStatus {
+  PENDING
+  APPROVED
+  ORDERED
+  RECEIVED
+  REJECTED
+  CANCELLED
+}
+
+model StockItem {
+  id        String @id @default(cuid())
+  name      String
+  code      String? @unique
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  requests  StockRequest[]
+}
+
+model StockRequest {
+  id                    String @id @default(cuid())
+  stockItemId           String
+  requestedByEmployeeId String
+  quantity              Decimal? @db.Decimal(10, 2)
+  note                  String?
+  status                StockRequestStatus @default(PENDING)
+  handledByEmployeeId   String?
+  handledAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  stockItem             StockItem @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  requestedBy           Employee @relation("StockRequester", fields: [requestedByEmployeeId], references: [id], onDelete: Restrict)
+  handledBy             Employee? @relation("StockHandler", fields: [handledByEmployeeId], references: [id], onDelete: Restrict)
+
+  @@index([requestedByEmployeeId, createdAt, id])
+  @@index([status, createdAt, id])
+  @@index([stockItemId])
 }

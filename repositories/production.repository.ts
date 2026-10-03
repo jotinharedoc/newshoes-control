@@ -44,6 +44,7 @@ export function findHygieneAccess(
       processType: { name: HYGIENE_PROCESS_NAME, active: true },
     },
     select: {
+      employee: { select: { role: { select: { permissions: { select: { permission: { select: { code: true } } } } } } } },
       processType: {
         select: {
           id: true,

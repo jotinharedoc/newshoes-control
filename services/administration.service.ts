@@ -1,4 +1,5 @@
 import { hash } from "bcryptjs";
+import { setEmployeeActive } from "@/repositories/administration.repository";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { createAuditEvent, publicEmployeeSelect, runAdministrationTransaction, lockAdministration, findAdministrationActor, findAssignableRole, countAssignableProcesses, findEmployeeForAdministration, countActiveManagers, saveEmployeeRecord, revokeEmployeeSessions, resetEmployeeCredentials, findCommissionRule, saveCommissionRule } from "@/repositories/administration.repository";
 import { AuthError } from "@/types/auth.types";
@@ -81,6 +82,28 @@ export async function resetAdministrationPin(actorId: string, employeeId: string
     await createAuditEvent(db, { actorEmployeeId: actorId, action: "PIN_RESET", targetType: "EMPLOYEE", targetId: employeeId,
       reason: "PIN provisório redefinido e sessões revogadas", beforeData: { mustChangePin: before.mustChangePin }, afterData: { mustChangePin: true, sessionsRevoked: true } });
     return { success: true };
+  });
+}
+
+export async function changeEmployeeAvailability(actorId: string, employeeId: string, active: boolean) {
+  return runAdministrationTransaction(async db => {
+    await authorize(db, actorId);
+    const before = await existingEmployee(db, employeeId);
+    if (!active && actorId === employeeId) invalid("Você não pode remover seu próprio acesso à gerência.");
+    if (!active && await countActiveManagers(db, employeeId) && await countActiveManagers(db, employeeId, true) === 0) {
+      invalid("Mantenha pelo menos um gerente ativo.");
+    }
+    if (active && !before.role.active) invalid("Ative o cargo antes de restaurar o funcionário.");
+    if (before.active === active) return before;
+    const after = await setEmployeeActive(db, employeeId, active);
+    if (!active) await revokeEmployeeSessions(db, employeeId);
+    await createAuditEvent(db, {
+      actorEmployeeId: actorId, action: active ? "EMPLOYEE_RESTORED" : "EMPLOYEE_REMOVED",
+      targetType: "EMPLOYEE", targetId: employeeId,
+      reason: active ? "Funcionário restaurado com histórico preservado" : "Funcionário removido do acesso; histórico preservado e sessões revogadas",
+      beforeData: snapshot(before), afterData: snapshot(after),
+    });
+    return after;
   });
 }
 

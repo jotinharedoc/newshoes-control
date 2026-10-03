@@ -68,8 +68,9 @@ type GroupSummary = Summary & {
   name: string;
 };
 
-export async function getManagementDashboard(
+async function getManagementData(
   filters: ManagementFilters,
+  options: { export: boolean; page?: number },
 ) {
   // Um único instante de referência para todas as sessões abertas.
   const now = new Date();
@@ -234,10 +235,14 @@ export async function getManagementDashboard(
     ),
   }));
 
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const page = Math.min(totalPages, Math.max(1, Math.floor(options.page || 1)));
   return {
+    pagination: { page, pageSize, totalPages, totalRecords: rows.length },
     generatedAt: now.toISOString(),
     metrics: calculateManagementMetrics(productions, breaks, filters, now),
-    employeeExportRows: buildManagementExportRows(productions, filters, now),
+    employeeExportRows: options.export ? buildManagementExportRows(productions, filters, now) : [],
     period: {
       start: start.toISOString(),
       endExclusive: endExclusive.toISOString(),
@@ -249,7 +254,7 @@ export async function getManagementDashboard(
     byProcess: [...processGroups.values()].sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR"),
     ),
-    rows,
+    rows: options.export ? rows : rows.slice((page - 1) * pageSize, page * pageSize),
     breaks: breakRows,
         // Intervalos pertencem ao funcionário, não a um processo.
     totalBreakMs: breakRows.reduce(
@@ -280,3 +285,11 @@ export async function getManagementDashboard(
 export type ManagementDashboardData = Awaited<
   ReturnType<typeof getManagementDashboard>
 >;
+
+export function getManagementDashboard(filters: ManagementFilters, page = 1) {
+  return getManagementData(filters, { export: false, page });
+}
+
+export function getManagementExport(filters: ManagementFilters) {
+  return getManagementData(filters, { export: true });
+}

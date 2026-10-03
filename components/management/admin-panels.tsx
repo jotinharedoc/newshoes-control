@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type Employee = { id: string; name: string; active: boolean; roleId: string; mustChangePin: boolean; role: { name: string }; processes: { processTypeId: string; processType: { name: string } }[] };
@@ -9,7 +10,7 @@ type Audit = { id: string; createdAt: string; actor: { name: string }; action: s
 const panel = "space-y-4 rounded-2xl border border-(--border) bg-(--surface) p-5";
 const button = "rounded-xl border border-(--border-strong) px-4 py-2 font-semibold disabled:opacity-50";
 const unit: Record<string, string> = { PAIR: "Par", LEFT_FOOT: "Pé esquerdo", RIGHT_FOOT: "Pé direito" };
-const actions: Record<string, string> = { EMPLOYEE_CREATED: "Funcionário criado", EMPLOYEE_UPDATED: "Funcionário alterado", PIN_RESET: "PIN redefinido", COMMISSION_UPDATED: "Comissão alterada", OPERATIONAL_STARTED: "Pausa operacional iniciada", OPERATIONAL_FINISHED: "Pausa operacional encerrada" };
+const actions: Record<string, string> = { EMPLOYEE_CREATED: "Funcionário criado", EMPLOYEE_UPDATED: "Funcionário alterado", EMPLOYEE_REMOVED: "Funcionário removido", EMPLOYEE_RESTORED: "Funcionário restaurado", STOCK_REQUEST_CREATED: "Material solicitado", STOCK_REQUEST_UPDATED: "Solicitação de material atualizada", PIN_RESET: "PIN redefinido", COMMISSION_UPDATED: "Comissão alterada", OPERATIONAL_STARTED: "Pausa operacional iniciada", OPERATIONAL_FINISHED: "Pausa operacional encerrada" };
 async function request<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(url, { method, cache: "no-store", ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
   const result = await response.json();
@@ -34,6 +35,20 @@ export function EmployeeAdministration() {
     setEditing(employee); setName(employee?.name ?? ""); setRoleId(employee?.roleId ?? ""); setActive(employee?.active ?? true);
     setProcessIds(employee?.processes.map(p => p.processTypeId) ?? []); setPin(""); setError("");
   }
+  async function changeAvailability(employee: Employee) {
+    if (saving.current) return;
+    if (!window.confirm(employee.active
+      ? `Remover ${employee.name}? O funcionário perderá acesso ao sistema, mas todo o histórico será preservado.`
+      : `Restaurar o acesso de ${employee.name}?`)) return;
+    saving.current = true; setBusy(true); setError(""); setNotice("");
+    try {
+      await request("/api/management/employees", "PATCH", { id: employee.id, action: employee.active ? "remove" : "restore" });
+      setData(await request<Options>("/api/management/employees"));
+      if (editing?.id === employee.id) select(null);
+      setNotice(employee.active ? "Funcionário removido. Histórico preservado e sessões revogadas." : "Funcionário restaurado.");
+    } catch (e) { setError(message(e)); }
+    finally { saving.current = false; setBusy(false); }
+  }
   async function save(reset = false) {
     if (saving.current) return;
     if (!window.confirm(reset ? `Redefinir o PIN de ${resetting?.name} e revogar suas sessões?` : `Salvar o cadastro de ${name}?`)) return;
@@ -53,7 +68,7 @@ export function EmployeeAdministration() {
     {!data ? <button className={button} onClick={() => request<Options>("/api/management/employees").then(setData).catch(e => setError(message(e)))}>Carregar funcionários</button> : <>
       <section className={panel}><h2 className="text-xl font-semibold">Funcionários cadastrados</h2>
         <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Nome", "Cargo", "Situação", "Processos", "PIN", "Ações"].map(h => <th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>
-          {data.employees.map(employee => <tr key={employee.id} className="border-t border-(--border)"><td className="p-2">{employee.name}</td><td className="p-2">{employee.role.name}</td><td className="p-2">{employee.active ? "Ativo" : "Inativo"}</td><td className="p-2">{employee.processes.map(p => p.processType.name).join(", ") || "Nenhum"}</td><td className="p-2">{employee.mustChangePin ? "Troca obrigatória" : "Definido"}</td><td className="flex flex-wrap gap-2 p-2"><button disabled={busy} className={button} onClick={() => select(employee)}>Editar {employee.name}</button><button disabled={busy} className={button} onClick={() => { setResetting(employee); setResetPin(""); }}>Resetar PIN de {employee.name}</button></td></tr>)}
+          {data.employees.map(employee => <tr key={employee.id} className="border-t border-(--border)"><td className="p-2">{employee.name}</td><td className="p-2">{employee.role.name}</td><td className="p-2">{employee.active ? "Ativo" : "Inativo"}</td><td className="p-2">{employee.processes.map(p => p.processType.name).join(", ") || "Nenhum"}</td><td className="p-2">{employee.mustChangePin ? "Troca obrigatória" : "Definido"}</td><td className="flex flex-wrap gap-2 p-2"><button disabled={busy} className={button} onClick={() => select(employee)}>Editar {employee.name}</button><button disabled={busy} className={button} onClick={() => { setResetting(employee); setResetPin(""); }}>Resetar PIN de {employee.name}</button><button disabled={busy} className={button} onClick={() => void changeAvailability(employee)}>{employee.active ? "Remover funcionário" : "Restaurar funcionário"}</button><Link className={button} href={`/gerencia/funcionarios/${employee.id}`}>Resumo de {employee.name}</Link></td></tr>)}
         </tbody></table></div>
       </section>
       <form method="post" action="/api/management/employees" className={panel} onSubmit={event => { event.preventDefault(); void save(); }}>
