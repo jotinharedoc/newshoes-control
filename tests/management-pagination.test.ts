@@ -44,6 +44,9 @@ test("resumo mensal usa ledger histórico e reúne processos, pés, retornos e c
   records[2].processType = { id: "p", name: "Pintura" };
   records[3].kind = "RETURN";
   records[4].sessions.push({ ...records[4].sessions[0], id: "continuation", kind: "CONTINUATION" });
+  mock.method(prisma.employee, "findFirst", async (args: { where: { id: string } }) => args.where.id === "employee" ? records[0].employee : null);
+  mock.method(prisma.production, "findMany", async () => records.filter(r => r.kind === "STANDARD"));
+  mock.method(prisma.commissionEntry, "aggregate", async () => ({ _sum: { amount: { toString: () => String(102 * 0.37) } } }));
   const summary = await getEmployeeMonthlySummary("employee", "2026-09");
   assert.deepEqual([summary.hygienePairs, summary.finalizationPairs, summary.finalizationFeet, summary.paintingPairs], [99, 1, 1, 1]);
   assert.equal(summary.earnedCommissionCents, 102 * 37);

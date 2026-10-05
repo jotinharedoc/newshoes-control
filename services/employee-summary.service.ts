@@ -1,4 +1,5 @@
-import { getManagementDashboard } from "@/services/management.service";
+import { findEmployeeMonthlySummary } from "@/repositories/employee-summary.repository";
+import { addProductionCount, emptyProductionCounts } from "@/utils/production-counts";
 import { AuthError } from "@/types/auth.types";
 
 export function currentBrazilMonth(now = new Date()) {
@@ -16,12 +17,13 @@ export function summaryMonthPeriod(month: string) {
 }
 
 export async function getEmployeeMonthlySummary(employeeId: string, month = currentBrazilMonth()) {
-  const data = await getManagementDashboard({ ...summaryMonthPeriod(month), employeeId });
-  const employee = data.filterOptions.employees.find(item => item.id === employeeId);
+  const { start, endExclusive } = summaryMonthPeriod(month);
+  const { employee, productions, amount } = await findEmployeeMonthlySummary(employeeId, start, endExclusive);
   if (!employee) throw new AuthError("INVALID_INPUT", "Funcionário não encontrado.", 404);
-  const counts = data.metrics.totals;
+  const counts = emptyProductionCounts();
+  for (const production of productions) addProductionCount(counts, production.processType.name, production.unit);
   return { employee, month, hygienePairs: counts.hygienePairs, finalizationPairs: counts.finalizationPairs,
     finalizationFeet: counts.finalizationFeet, paintingPairs: counts.paintingPairs,
     // Actual historical ledger: changing an employee's role must never erase earned commission.
-    earnedCommissionCents: data.totals.earnedCommissionCents };
+    earnedCommissionCents: Math.round(Number(amount?.toString() ?? 0) * 100) };
 }

@@ -88,7 +88,7 @@ export function workflowFixture() {
     for (const record of found) {
       record.status = args.data.status as ProductionStatus;
       record.version++;
-      if (args.data.completedAt) record.completedAt = args.data.completedAt as Date;
+      if (args.data.completedAt !== undefined) record.completedAt = args.data.completedAt as Date;
     }
     return { count: found.length };
   });
@@ -109,8 +109,11 @@ export function workflowFixture() {
     }
     return { count: open.length };
   });
-  mock.method(prisma.commissionEntry, "create", async (args: Prisma.CommissionEntryCreateArgs) => {
-    const data = args.data as Prisma.CommissionEntryUncheckedCreateInput;
+  mock.method(prisma.commissionEntry, "upsert", async (args: Prisma.CommissionEntryUpsertArgs) => {
+    assert.deepEqual(args.update, {});
+    const existing = commissions.find(c => c.productionId === args.where.productionId);
+    if (existing) return existing;
+    const data = args.create as Prisma.CommissionEntryUncheckedCreateInput;
     assert.equal(records.find(r => r.id === data.productionId)?.kind, "STANDARD");
     assert.equal(commissions.some(c => c.productionId === data.productionId), false);
     commissions.push({ productionId: data.productionId, amount: data.amount.toString() });

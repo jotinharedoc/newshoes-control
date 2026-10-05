@@ -1,3 +1,4 @@
+import { ProductionNavigation } from "@/components/production/production-navigation";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -48,59 +49,7 @@ export function WorkspaceHome({
           </div>
         </header>
 
-        <nav
-          aria-label="Navegação principal"
-          className="flex gap-2 overflow-x-auto py-5"
-        >
-          <Link
-            href="/producao"
-            aria-current={!management ? "page" : undefined}
-            className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-              !management
-                ? "bg-(--brand) text-white"
-                : "bg-(--surface) text-(--text-secondary) hover:bg-(--surface-hover)"
-            }`}
-          >
-            Produção
-          </Link>
-
-          <Link
-            href="/producao/retornos"
-            className="whitespace-nowrap rounded-xl bg-(--surface) px-4 py-2.5 text-sm font-semibold text-(--text-secondary) transition hover:bg-(--surface-hover)"
-          >
-            Meus retornos
-          </Link>
-
-          {canAccessManagement && (
-            <>
-              <Link
-                href="/gerencia"
-                aria-current={management ? "page" : undefined}
-                className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                  management
-                    ? "bg-(--brand) text-white"
-                    : "bg-(--surface) text-(--text-secondary) hover:bg-(--surface-hover)"
-                }`}
-              >
-                Gerência
-              </Link>
-
-              <Link
-                href="/gerencia/qualidade"
-                className="whitespace-nowrap rounded-xl bg-(--surface) px-4 py-2.5 text-sm font-semibold text-(--text-secondary) transition hover:bg-(--surface-hover)"
-              >
-                Controle de qualidade
-              </Link>
-            </>
-          )}
-
-          <Link
-            href="/trocar-pin"
-            className="whitespace-nowrap rounded-xl bg-(--surface) px-4 py-2.5 text-sm font-semibold text-(--text-secondary) transition hover:bg-(--surface-hover)"
-          >
-            Alterar PIN
-          </Link>
-        </nav>
+        <ProductionNavigation canAccessManagement={canAccessManagement} current={management ? "/gerencia" : "/producao"} />
 
         <section className="rounded-[28px] border border-(--border) bg-(--surface) p-6 sm:p-8">
           <div className="max-w-3xl">

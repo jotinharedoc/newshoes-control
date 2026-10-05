@@ -1,4 +1,5 @@
 import { managementConfig, type ManagementConfig } from "@/config/management";
+import { addProductionCount, emptyProductionCounts as emptyCounts } from "@/utils/production-counts";
 import type { ManagementProductionRecord, ManagementFilters } from "@/repositories/management.repository";
 
 type BreakRecord = {
@@ -17,10 +18,6 @@ function unionMs(spans: Span[]) {
     end = Math.max(end, to);
   }
   return total;
-}
-
-function emptyCounts() {
-  return { hygienePairs: 0, finalizationPairs: 0, finalizationFeet: 0, paintingPairs: 0, completedProductions: 0 };
 }
 
 /** Pure calculation shared by the dashboard and export. All timestamps come from persistence. */
@@ -87,12 +84,7 @@ export function calculateManagementMetrics(
     if (production.kind !== "STANDARD" || production.status !== "COMPLETED" || !completedAt || completedAt.getTime() < start || completedAt.getTime() >= end) continue;
     const { day, hour } = local(completedAt);
     const entry = getDay(production.employee, day);
-    entry.completedProductions++;
-    if (production.processType.name === "Higienização" && production.unit === "PAIR") entry.hygienePairs++;
-    if (production.processType.name === "Finalização") {
-      if (production.unit === "PAIR") entry.finalizationPairs++; else entry.finalizationFeet++;
-    }
-    if (production.processType.name === "Pintura" && production.unit === "PAIR") entry.paintingPairs++;
+    addProductionCount(entry, production.processType.name, production.unit);
     const target = config.targets[production.processType.name]?.[production.unit];
     if (target && target > 0) {
       const key = hour < config.afternoonStartsAtHour ? "morningGoalPercent" : "afternoonGoalPercent";

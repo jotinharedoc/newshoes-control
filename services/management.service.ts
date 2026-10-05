@@ -114,7 +114,7 @@ async function getManagementData(
     // Retornos e cancelamentos não geram comissão neste relatório.
     const earnedCommissionCents =
       production.kind === "STANDARD" &&
-      production.status === "COMPLETED" &&
+      production.status !== "CANCELLED" &&
       commission !== null &&
       isWithinPeriod(commission.earnedAt, start, endExclusive)
         ? toCents(commission.amount)

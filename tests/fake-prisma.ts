@@ -45,6 +45,8 @@ export const prisma = {
     create: (args: Prisma.WorkSessionCreateArgs) => unexpectedQuery(args),
   },
   commissionEntry: {
+    aggregate: (args: Prisma.CommissionEntryAggregateArgs) => unexpectedQuery(args),
+    upsert: (args: Prisma.CommissionEntryUpsertArgs) => unexpectedQuery(args),
     create: (args: Prisma.CommissionEntryCreateArgs) => unexpectedQuery(args),
   },
   $transaction: async (

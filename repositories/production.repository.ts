@@ -201,7 +201,7 @@ type TransitionProductionInput = {
   version: number;
   from: ProductionStatus[];
   status: ProductionStatus;
-  completedAt?: Date;
+  completedAt?: Date | null;
 };
 
 export function transitionProduction(
@@ -218,7 +218,7 @@ export function transitionProduction(
     data: {
       status: input.status,
       version: { increment: 1 },
-      ...(input.completedAt ? { completedAt: input.completedAt } : {}),
+      ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
     },
   });
 }
@@ -229,8 +229,11 @@ export function createCommissionEntry(
   earnedAt: Date,
   database: DatabaseClient,
 ) {
-  return database.commissionEntry.create({
-    data: { productionId, amount, earnedAt },
+  // Reopening a completed production never replaces its historical ledger entry.
+  return database.commissionEntry.upsert({
+    where: { productionId },
+    update: {},
+    create: { productionId, amount, earnedAt },
   });
 }
 

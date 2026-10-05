@@ -46,7 +46,7 @@ export function buildManagementExportRows(productions: ManagementProductionRecor
         cursor = boundary;
       }
     }
-    const commission = production.kind === "STANDARD" && production.status === "COMPLETED" ? production.commission : null;
+    const commission = production.kind === "STANDARD" && production.status !== "CANCELLED" ? production.commission : null;
     if (commission && commission.earnedAt.getTime() >= start && commission.earnedAt.getTime() < end) {
       const day = dayOf(commission.earnedAt);
       const row = groups.filter(row => row.day === day).at(-1) ?? entry(day, continuation);

@@ -292,8 +292,8 @@ test(
 
     mock.method(
       prisma.commissionEntry,
-      "create",
-      async (args: Prisma.CommissionEntryCreateArgs) => {
+      "upsert",
+      async (args: Prisma.CommissionEntryUpsertArgs) => {
         commissionCreates.push(args);
 
         return {
