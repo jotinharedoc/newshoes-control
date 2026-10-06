@@ -390,7 +390,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
               <button
                 type="button"
                 onClick={() => void start()}
-                disabled={busy || !validCode || !occurrenceChoice}
+                disabled={busy || !validCode}
                 className={primary}
               >
                 {busy ? "Salvando..." : "Confirmar e iniciar"}
