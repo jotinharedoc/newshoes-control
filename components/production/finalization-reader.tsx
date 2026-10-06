@@ -120,8 +120,8 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
   const [message, setMessage] = useState("");
 
   const [code, setCode] = useState("");
-  const [occurrenceChoice, setOccurrenceChoice] = useState<Choice>();
-  const [unit, setUnit] = useState<Unit>("PAIR");
+const [unit, setUnit] = useState<Unit>("PAIR");
+const [confirming, setConfirming] = useState(false);
   
 
   const requestInProgress = useRef(false);
@@ -172,41 +172,45 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
     }
   }
 
-  async function start() {
-    if (requestInProgress.current || !snapshot) return;
+ async function start() {
+  if (requestInProgress.current || !snapshot) return;
 
-    if (!validCode) {
-      setError(SHOE_CODE_ERROR);
-      return;
-    }
+  if (!validCode) {
+    setError(SHOE_CODE_ERROR);
+    return;
+  }
 
-    requestInProgress.current = true;
-    setBusy(true);
-    setError("");
-    setMessage("");
+  requestInProgress.current = true;
+  setBusy(true);
+  setError("");
+  setMessage("");
+
+  try {
+    const nextSnapshot = await requestOverview("POST", {
+      code: code.trim(),
+      unit,
+      kind: "STANDARD",
+    });
+
+    applySnapshot(nextSnapshot);
+    setConfirming(false);
+    setCode("");
+    setMessage(
+      "Finalização iniciada. Outros trabalhos abertos ficaram para depois.",
+    );
+  } catch (failure) {
+    setError(errorMessage(failure));
 
     try {
-      
-
-      applySnapshot(nextSnapshot);
-      setConfirming(false);
-      setCode("");
-      setMessage(
-        "Finalização iniciada. Outros trabalhos abertos ficaram para depois.",
-      );
-    } catch (failure) {
-      setError(errorMessage(failure));
-
-      try {
-        applySnapshot(await requestOverview("GET"));
-      } catch {
-        // Preserva a mensagem original caso a atualização também falhe.
-      }
-    } finally {
-      requestInProgress.current = false;
-      setBusy(false);
+      applySnapshot(await requestOverview("GET"));
+    } catch {
+      // Preserva a mensagem original caso a atualização também falhe.
     }
+  } finally {
+    requestInProgress.current = false;
+    setBusy(false);
   }
+}
 
   async function changeState(production: Production, action: Action) {
     if (requestInProgress.current) return;
