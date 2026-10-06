@@ -85,6 +85,8 @@ function productionRecord(): TestProduction {
 
 afterEach(() => mock.restoreAll());
 beforeEach(() => {
+  mock.method(prisma, "$queryRaw", async () => []);
+  mock.method(prisma.shoeOccurrence, "findFirst", async () => ({ id: "occurrence-1", shoeId: "shoe-1", sequence: 1, productions: [] }));
   mock.method(prisma.employee, "findFirst", async () => ({ id: "employee" }));
   mock.method(prisma.employeeBreak, "findFirst", async () => null);
 });

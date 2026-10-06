@@ -94,6 +94,7 @@ test("acompanhamento e reabertura concorrente no PostgreSQL local", { skip: proc
     await prisma.production.deleteMany({ where: owned });
     await prisma.employeeProcess.deleteMany({ where: owned });
     await prisma.employee.deleteMany({ where: { id: { in: employees }, roleId: role.id } });
+    await prisma.shoeOccurrence.deleteMany({ where: { shoeId: { in: shoes } } });
     await prisma.shoe.deleteMany({ where: { id: { in: shoes } } });
     await prisma.role.delete({ where: { id: role.id } });
     await prisma.$disconnect();

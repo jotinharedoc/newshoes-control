@@ -82,7 +82,7 @@ async function getManagementData(
     findManagementFilterOptions(),
   ]);
 
-  const rows = productions.map((production) => {
+  const rows = productions.filter(p => p.status !== "CANCELLED").map((production) => {
     const workedMs = production.sessions.reduce(
       (total, session) =>
         total +

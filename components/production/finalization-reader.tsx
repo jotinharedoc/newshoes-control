@@ -1,4 +1,6 @@
 "use client";
+import { OccurrenceChoice } from "./occurrence-choice";
+import type { OccurrenceChoice as Choice } from "@/services/shoe-occurrence.service";
 
 import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
 
@@ -120,6 +122,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
   const [message, setMessage] = useState("");
 
   const [code, setCode] = useState("");
+  const [occurrenceChoice, setOccurrenceChoice] = useState<Choice>();
   const [unit, setUnit] = useState<Unit>("PAIR");
   const [confirming, setConfirming] = useState(false);
 
@@ -172,7 +175,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
   }
 
   async function start() {
-    if (requestInProgress.current || !snapshot) return;
+    if (requestInProgress.current || !snapshot || !occurrenceChoice) return;
 
     if (!validCode) {
       setError(SHOE_CODE_ERROR);
@@ -187,6 +190,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
     try {
       const nextSnapshot = await requestOverview("POST", {
         code: code.trim(),
+        ...occurrenceChoice,
         unit,
         kind: "STANDARD",
       });
@@ -382,10 +386,11 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
                 </div>
               </dl>
 
+              <OccurrenceChoice key={code} code={code} onChange={setOccurrenceChoice} />
               <button
                 type="button"
                 onClick={() => void start()}
-                disabled={busy || !validCode}
+                disabled={busy || !validCode || !occurrenceChoice}
                 className={primary}
               >
                 {busy ? "Salvando..." : "Confirmar e iniciar"}
@@ -464,7 +469,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
 
               <button
                 type="button"
-                disabled={busy || !validCode}
+                disabled={busy || !validCode || !occurrenceChoice}
                 onClick={() => {
                   setError("");
                   setMessage("");

@@ -71,6 +71,33 @@ test("telas e API do funcionário usam exclusivamente a sessão (HTTP local)", {
       const invalid = await (await call("/producao/minha-producao?month=2026-13", workerCookie)).text();
       assert.ok(invalid.includes("Selecione um mês válido."));
     });
+    await t.test("Gerência busca código e anula/restaura; trabalhador recebe 403", async () => {
+      const code = `000${randomInt(1e10, 9e10)}`;
+      const initial = await call("/api/production/hygiene", workerCookie, { code, newOccurrence: true, expectedLatestId: null });
+      assert.equal(initial.status, 200);
+      const current = (await initial.json()).current;
+      const original = await prisma.production.findUniqueOrThrow({ where: { id: current.id } }); shoes.push(original.shoeId);
+      await call("/api/production/hygiene", workerCookie, { productionId: current.id, version: current.version, action: "finish" }, "PATCH");
+      const completed = await prisma.production.findUniqueOrThrow({ where: { id: current.id }, include: { sessions: true, commission: true } });
+      assert.equal((await call(`/api/production/occurrences?code=${code}`, "")).status, 401);
+      const occurrences = await call(`/api/production/occurrences?code=${code}`, workerCookie);
+      assert.equal(occurrences.status, 200); assert.match(occurrences.headers.get("cache-control")!, /no-store/);
+      assert.equal((await call("/gerencia/registros", workerCookie)).status, 307);
+      const page = await call(`/gerencia/registros?code=${code}`, managerCookie);
+      assert.equal(page.status, 200); const html = await page.text();
+      assert.ok(html.includes(code)); assert.ok(html.includes("Anular registro"));
+      const body = { id: completed.id, version: completed.version, action: "cancel", reason: "QA HTTP" };
+      assert.equal((await call("/api/management/productions", "", body)).status, 401);
+      assert.equal((await call("/api/management/productions", workerCookie, body)).status, 403);
+      assert.equal((await call("/api/management/productions", managerCookie, { ...body, reason: "" })).status, 400);
+      const cancelled = await call("/api/management/productions", managerCookie, body);
+      assert.equal(cancelled.status, 200); const result = await cancelled.json();
+      const cancelledPage = await (await call(`/gerencia/registros?code=${code}`, managerCookie)).text();
+      assert.ok(cancelledPage.includes("Restaurar registro"));
+      assert.equal((await call("/api/management/productions", managerCookie, { ...body, version: result.version, action: "restore" })).status, 200);
+      const restored = await prisma.production.findUniqueOrThrow({ where: { id: completed.id }, include: { sessions: true, commission: true } });
+      assert.deepEqual(restored.sessions, completed.sessions); assert.deepEqual(restored.commission, completed.commission);
+    });
     await t.test("gerente produtor mantém produtividade com comissão zero e acesso administrativo", async () => {
       const created = await call("/api/production/hygiene", managerCookie, { code: `000${randomInt(1e10, 9e10)}` });
       const current = (await created.json()).current;
@@ -90,6 +117,7 @@ test("telas e API do funcionário usam exclusivamente a sessão (HTTP local)", {
     await prisma.production.deleteMany({ where: owned });
     await prisma.employeeProcess.deleteMany({ where: owned });
     await prisma.employee.deleteMany({ where: { id: { in: employees }, roleId: { in: roles } } });
+    await prisma.shoeOccurrence.deleteMany({ where: { shoeId: { in: shoes } } });
     await prisma.shoe.deleteMany({ where: { id: { in: shoes } } });
     await prisma.rolePermission.deleteMany({ where: { roleId: { in: roles } } });
     await prisma.role.deleteMany({ where: { id: { in: roles } } });

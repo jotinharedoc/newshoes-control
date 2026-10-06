@@ -133,13 +133,13 @@ export function findPaintingForAction(
 }
 
 export function findStandardPaintingForShoe(
-  shoeId: string,
+  occurrenceId: string,
   processTypeId: string,
   database: DatabaseClient = prisma,
 ) {
   return database.production.findFirst({
     where: {
-      shoeId,
+      occurrenceId,
       processTypeId,
       kind: ProductionKind.STANDARD,
       status: {
@@ -158,6 +158,7 @@ type CreatePaintingInput = {
   employeeId: string;
   processTypeId: string;
   shoeId: string;
+  occurrenceId: string;
   commissionAmountSnapshot: Prisma.Decimal;
   now: Date;
 };
@@ -171,6 +172,7 @@ export function createPaintingProduction(
       employeeId: input.employeeId,
       processTypeId: input.processTypeId,
       shoeId: input.shoeId,
+      occurrenceId: input.occurrenceId,
       unit: WorkUnit.PAIR,
       kind: ProductionKind.STANDARD,
       status: ProductionStatus.IN_PROGRESS,

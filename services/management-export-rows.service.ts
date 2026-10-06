@@ -13,6 +13,7 @@ export function buildManagementExportRows(productions: ManagementProductionRecor
   type Row = { employeeId: string; productionId: string; day: string; code: string; kind: "Normal" | "Continuação" | "Retorno"; processName: string; startedAt: string | null; endedAt: string | null; workedMs: number; earnedCommissionCents: number };
   const rows: Row[] = [];
   for (const production of productions) {
+    if (production.status === "CANCELLED") continue;
     const groups: Row[] = [];
     let continuation = false;
     function entry(day: string, resumed: boolean) {
@@ -46,7 +47,7 @@ export function buildManagementExportRows(productions: ManagementProductionRecor
         cursor = boundary;
       }
     }
-    const commission = production.kind === "STANDARD" && production.status !== "CANCELLED" ? production.commission : null;
+    const commission = production.kind === "STANDARD" ? production.commission : null;
     if (commission && commission.earnedAt.getTime() >= start && commission.earnedAt.getTime() < end) {
       const day = dayOf(commission.earnedAt);
       const row = groups.filter(row => row.day === day).at(-1) ?? entry(day, continuation);

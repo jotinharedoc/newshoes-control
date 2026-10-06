@@ -1,4 +1,6 @@
 "use client";
+import { OccurrenceChoice } from "./occurrence-choice";
+import type { OccurrenceChoice as Choice } from "@/services/shoe-occurrence.service";
 
 import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
 
@@ -37,6 +39,7 @@ async function readOverview(response: Response): Promise<HygieneOverview> {
 export function CodeReader({ employeeName, initialOverview, canUseBreaks }: CodeReaderProps) {
   const [overview, setOverview] = useState(initialOverview);
   const [code, setCode] = useState("");
+  const [occurrenceChoice, setOccurrenceChoice] = useState<Choice>();
   const [confirming, setConfirming] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [deferring, setDeferring] = useState(false);
@@ -143,7 +146,7 @@ clearForm();
   }
 
     async function startProduction() {
-    if (requestInProgress.current) return;
+    if (requestInProgress.current || !occurrenceChoice) return;
 
     const normalizedCode = code.trim();
 
@@ -152,7 +155,7 @@ clearForm();
       return;
     }
 
-    if (current?.code === normalizedCode) {
+    if (current?.code === normalizedCode && !occurrenceChoice.newOccurrence) {
       setError(
         "Esse código já é o trabalho atual. Cancele a troca para voltar a ele.",
       );
@@ -161,6 +164,7 @@ clearForm();
 
     const body: Record<string, unknown> = {
       code: normalizedCode,
+      ...occurrenceChoice,
     };
 
     if (switching && current && !deferring) {
@@ -271,7 +275,8 @@ clearForm();
           </p>
         </section>
         {error && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-        <button type="button" onClick={() => void startProduction()} disabled={pending} className="primary-button w-full">
+        <OccurrenceChoice key={code} code={code} onChange={setOccurrenceChoice} />
+        <button type="button" onClick={() => void startProduction()} disabled={pending || !occurrenceChoice} className="primary-button w-full">
           {pending ? "Salvando..." : switching ? "Confirmar troca" : "Confirmar e iniciar"}
         </button>
         <button type="button" onClick={() => setConfirming(false)} disabled={pending} className="w-full rounded-2xl border border-(--border-strong) px-4 py-3.5 font-semibold text-(--text-primary) transition hover:bg-(--surface-hover) disabled:opacity-50">

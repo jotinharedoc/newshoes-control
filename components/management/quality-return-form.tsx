@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
 
 type Candidate = {
+  occurrence?: { sequence: number } | null;
   id: string;
   unit: string;
   completedAt: string | null;
@@ -290,7 +291,7 @@ export function QualityReturnForm() {
                   </p>
 
                   <p className="mt-1 text-sm text-(--text-secondary)">
-                    Responsável: {candidate.employee.name}
+                    Uso {candidate.occurrence?.sequence ?? 1} · Responsável: {candidate.employee.name}
                   </p>
 
                   <p className="mt-1 text-sm text-(--text-secondary)">

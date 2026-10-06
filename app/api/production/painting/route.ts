@@ -1,3 +1,4 @@
+import { readOccurrenceChoice } from "@/services/shoe-occurrence.service";
 import { readJsonObject, readSessionToken } from "@/lib/auth-http";
 import { productionErrorResponse } from "@/lib/production-http";
 
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
     const overview = await startPaintingProduction(
       employee.id,
       body.code,
+      readOccurrenceChoice(body),
     );
 
     return Response.json(overview, {

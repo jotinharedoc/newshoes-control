@@ -175,6 +175,7 @@ test("administração e pausa operacional no PostgreSQL local", { skip: process.
       await db.commissionEntry.deleteMany({ where: { productionId: { in: owned.map(p => p.id) } } });
       await db.production.deleteMany({ where: { employeeId: { in: employees }, kind: "RETURN" } });
       await db.production.deleteMany({ where: { employeeId: { in: employees } } });
+      await db.shoeOccurrence.deleteMany({ where: { shoeId: { in: owned.map(p => p.shoeId) }, productions: { none: {} } } });
       await db.shoe.deleteMany({ where: { id: { in: owned.map(p => p.shoeId) }, productions: { none: {} } } });
       await db.managementSession.deleteMany({ where: { employeeId: { in: employees } } });
       await db.employeeProcess.deleteMany({ where: { employeeId: { in: employees } } });

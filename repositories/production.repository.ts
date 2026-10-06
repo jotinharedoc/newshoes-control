@@ -114,13 +114,13 @@ export function findHygieneProductionForAction(
 }
 
 export function findStandardHygieneForShoe(
-  shoeId: string,
+  occurrenceId: string,
   processTypeId: string,
   database: DatabaseClient = prisma,
 ) {
   return database.production.findFirst({
     where: {
-      shoeId,
+      occurrenceId,
       processTypeId,
       kind: ProductionKind.STANDARD,
       unit: WorkUnit.PAIR,
@@ -143,6 +143,7 @@ type CreateHygieneProductionInput = {
   employeeId: string;
   processTypeId: string;
   shoeId: string;
+  occurrenceId: string;
   commissionAmountSnapshot: Prisma.Decimal;
   now: Date;
 };
@@ -156,6 +157,7 @@ export function createHygieneProduction(
       employeeId: input.employeeId,
       processTypeId: input.processTypeId,
       shoeId: input.shoeId,
+      occurrenceId: input.occurrenceId,
       unit: WorkUnit.PAIR,
       kind: ProductionKind.STANDARD,
       status: ProductionStatus.IN_PROGRESS,

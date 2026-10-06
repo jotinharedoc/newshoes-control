@@ -98,13 +98,13 @@ export function findFinalizationForAction(
 }
 
 export function findStandardFinalizationsForShoe(
-  shoeId: string,
+  occurrenceId: string,
   processTypeId: string,
   database: DatabaseClient = prisma,
 ) {
   return database.production.findMany({
     where: {
-      shoeId,
+      occurrenceId,
       processTypeId,
       kind: ProductionKind.STANDARD,
       status: { not: ProductionStatus.CANCELLED },
@@ -122,6 +122,7 @@ type CreateFinalizationInput = {
   employeeId: string;
   processTypeId: string;
   shoeId: string;
+  occurrenceId: string;
   unit: WorkUnit;
   commissionAmountSnapshot: Prisma.Decimal;
   now: Date;
@@ -136,6 +137,7 @@ export function createFinalizationProduction(
       employeeId: input.employeeId,
       processTypeId: input.processTypeId,
       shoeId: input.shoeId,
+      occurrenceId: input.occurrenceId,
       unit: input.unit,
       kind: ProductionKind.STANDARD,
       status: ProductionStatus.IN_PROGRESS,

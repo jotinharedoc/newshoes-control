@@ -1,3 +1,4 @@
+import { resolveShoeOccurrence, type OccurrenceChoice } from "@/services/shoe-occurrence.service";
 import { productionCommission } from "@/utils/production-commission";
 import { normalizeShoeCode } from "@/utils/shoe-code";
 import { prepareWorkSwitch } from "@/services/work-switch.service";
@@ -19,7 +20,6 @@ import {
   findStandardHygieneForShoe,
   runProductionTransaction,
   transitionProduction,
-  upsertShoe,
   type ProductionViewRecord,
 } from "@/repositories/production.repository";
 import { ProductionError } from "@/types/production-error.types";
@@ -111,11 +111,12 @@ async function createProductionInsideTransaction(
   employeeId: string,
   code: string,
   database: Prisma.TransactionClient,
+  choice: OccurrenceChoice = {},
 ) {
   const { processType, rule } = await requireHygieneAccess(employeeId, database);
-  const shoe = await upsertShoe(code, database);
+  const shoe = await resolveShoeOccurrence(database, code, processType.id, "PAIR", choice);
   const existing = await findStandardHygieneForShoe(
-    shoe.id,
+    shoe.occurrenceId,
     processType.id,
     database,
   );
@@ -132,7 +133,8 @@ async function createProductionInsideTransaction(
     {
       employeeId,
       processTypeId: processType.id,
-      shoeId: shoe.id,
+      shoeId: shoe.shoeId,
+      occurrenceId: shoe.occurrenceId,
       commissionAmountSnapshot: rule.commissionAmount,
       now: new Date(),
     },
@@ -158,6 +160,7 @@ function mapDatabaseConflict(error: unknown): never {
 export async function startHygieneProduction(
   employeeId: string,
   shoeCode: string,
+  choice: OccurrenceChoice = {},
 ) {
   const code = normalizeShoeCode(shoeCode);
 
@@ -177,6 +180,7 @@ export async function startHygieneProduction(
         employeeId,
         code,
         database,
+        choice,
       );
     });
   } catch (error) {
@@ -391,6 +395,7 @@ export async function finishAndStartNextHygieneProduction(
   productionId: string,
   version: number,
   nextShoeCode: string,
+  choice: OccurrenceChoice = {},
 ) {
   assertVersion(version);
   const code = normalizeShoeCode(nextShoeCode);
@@ -408,9 +413,6 @@ export async function finishAndStartNextHygieneProduction(
       ]);
       if (production.version !== version) {
         throw new ProductionError("PRODUCTION_CONFLICT", "A produção foi alterada em outra tela.", 409);
-      }
-      if (production.shoe.code === code) {
-        throw new ProductionError("INVALID_INPUT", "Informe o código do próximo tênis.", 400);
       }
 
       const now = new Date();
@@ -444,7 +446,7 @@ export async function finishAndStartNextHygieneProduction(
         now,
         database,
       );
-      await createProductionInsideTransaction(employeeId, code, database);
+      await createProductionInsideTransaction(employeeId, code, database, choice);
     });
   } catch (error) {
     mapDatabaseConflict(error);

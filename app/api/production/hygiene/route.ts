@@ -1,3 +1,4 @@
+import { readOccurrenceChoice } from "@/services/shoe-occurrence.service";
 import { readJsonObject, readSessionToken } from "@/lib/auth-http";
 import { productionErrorResponse } from "@/lib/production-http";
 import { requireAccess } from "@/services/auth.service";
@@ -43,11 +44,12 @@ export async function POST(request: Request) {
           body.currentProductionId,
           typeof body.version === "number" ? body.version : Number.NaN,
           code,
+          readOccurrenceChoice(body),
         ),
       );
     }
 
-    return Response.json(await startHygieneProduction(employee.id, code));
+    return Response.json(await startHygieneProduction(employee.id, code, readOccurrenceChoice(body)));
   } catch (error) {
     return productionErrorResponse(error);
   }

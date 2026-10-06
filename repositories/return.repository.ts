@@ -67,6 +67,7 @@ export function findReturnCandidates(
     },
     select: {
       id: true,
+      occurrence: { select: { sequence: true } },
       unit: true,
       completedAt: true,
       shoe: {
@@ -113,6 +114,7 @@ export function findReturnSource(
     select: {
       id: true,
       shoeId: true,
+      occurrenceId: true,
       employeeId: true,
       processTypeId: true,
       unit: true,
@@ -230,6 +232,7 @@ export function createQualityReturn(
   return database.production.create({
     data: {
       shoeId: input.source.shoeId,
+      occurrenceId: input.source.occurrenceId,
       employeeId: input.source.employeeId,
       processTypeId: input.source.processTypeId,
       unit: input.source.unit,

@@ -79,6 +79,7 @@ export function calculateManagementMetrics(
   }
   const completedDurations = new Map<string, number[]>();
   for (const production of productions) {
+    if (production.status === "CANCELLED") continue;
     for (const session of production.sessions) distribute(production.employee, session.startedAt, session.endedAt, "work");
     const completedAt = production.completedAt;
     if (production.kind !== "STANDARD" || production.status !== "COMPLETED" || !completedAt || completedAt.getTime() < start || completedAt.getTime() >= end) continue;

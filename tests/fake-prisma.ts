@@ -37,6 +37,11 @@ export const prisma = {
     create: (args: Prisma.ProductionCreateArgs) => unexpectedQuery(args),
     updateMany: (args: Prisma.ProductionUpdateManyArgs) => unexpectedQuery(args),
   },
+  shoeOccurrence: {
+    findFirst: (args: Prisma.ShoeOccurrenceFindFirstArgs) => unexpectedQuery(args),
+    findMany: (args: Prisma.ShoeOccurrenceFindManyArgs) => unexpectedQuery(args),
+    create: (args: Prisma.ShoeOccurrenceCreateArgs) => unexpectedQuery(args),
+  },
   shoe: {
     upsert: (args: Prisma.ShoeUpsertArgs) => unexpectedQuery(args),
   },

@@ -157,13 +157,28 @@ model Shoe {
   id          String       @id @default(cuid())
   code        String       @unique
   productions Production[]
+  occurrences ShoeOccurrence[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+model ShoeOccurrence {
+  id String @id @default(cuid())
+  shoeId String
+  sequence Int
+  createdAt DateTime @default(now())
+  shoe Shoe @relation(fields: [shoeId], references: [id], onDelete: Restrict)
+  productions Production[]
+
+  @@unique([shoeId, sequence])
 }
 
 model Production {
   id                       String           @id @default(cuid())
   shoeId                   String
+  occurrenceId             String?
+  cancelledFromStatus      ProductionStatus?
+  cancelledAt              DateTime?
   processTypeId            String
   employeeId               String
   unit                     WorkUnit
@@ -179,6 +194,7 @@ model Production {
   updatedAt                DateTime         @updatedAt
 
   shoe             Shoe                   @relation(fields: [shoeId], references: [id])
+  occurrence       ShoeOccurrence?        @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
   processType      ProcessType            @relation(fields: [processTypeId], references: [id])
   employee         Employee               @relation(fields: [employeeId], references: [id])
   sourceProduction Production?            @relation("ProductionReturns", fields: [sourceProductionId], references: [id], onDelete: Restrict)
@@ -189,6 +205,7 @@ model Production {
   corrections      ManagementCorrection[]
 
   @@index([shoeId])
+  @@index([occurrenceId])
   @@index([processTypeId])
   @@index([employeeId])
   @@index([sourceProductionId])

@@ -1,3 +1,4 @@
+import { readOccurrenceChoice } from "@/services/shoe-occurrence.service";
 import { WorkUnit } from "@/lib/generated/prisma/client";
 
 import { readJsonObject, readSessionToken } from "@/lib/auth-http";
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
       employee.id,
       body.code,
       body.unit,
+      readOccurrenceChoice(body),
     );
 
     return Response.json(overview, { status: 201 });

@@ -1,3 +1,4 @@
+import { resolveShoeOccurrence, type OccurrenceChoice } from "@/services/shoe-occurrence.service";
 import { productionCommission } from "@/utils/production-commission";
 import { normalizeShoeCode } from "@/utils/shoe-code";
 import {
@@ -22,7 +23,6 @@ import {
   createWorkSession,
   runProductionTransaction,
   transitionProduction,
-  upsertShoe,
 } from "@/repositories/production.repository";
 
 import { applyProductionBathroomAction, assertNoOpenEmployeeBreak } from "@/services/employee-break.service";
@@ -142,6 +142,7 @@ export async function getPaintingOverview(
 export async function startPaintingProduction(
   employeeId: string,
   shoeCode: string,
+  choice: OccurrenceChoice = {},
 ) {
   const code = normalizeShoeCode(shoeCode);
 
@@ -164,10 +165,10 @@ export async function startPaintingProduction(
         );
       }
 
-      const shoe = await upsertShoe(code, database);
+      const shoe = await resolveShoeOccurrence(database, code, process.id, "PAIR", choice);
 
       const existing = await findStandardPaintingForShoe(
-        shoe.id,
+        shoe.occurrenceId,
         process.id,
         database,
       );
@@ -196,7 +197,8 @@ export async function startPaintingProduction(
         {
           employeeId,
           processTypeId: process.id,
-          shoeId: shoe.id,
+          shoeId: shoe.shoeId,
+          occurrenceId: shoe.occurrenceId,
           commissionAmountSnapshot: rule.commissionAmount,
           now,
         },

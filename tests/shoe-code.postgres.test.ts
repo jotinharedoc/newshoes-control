@@ -65,6 +65,7 @@ test("códigos integrais no PostgreSQL local", { skip: process.env.SHOE_CODE_POS
         await db.commissionEntry.deleteMany({ where: { productionId: { in: ids } } });
         await db.production.deleteMany({ where: { employeeId, kind: "RETURN" } });
         await db.production.deleteMany({ where: { employeeId } });
+        await db.shoeOccurrence.deleteMany({ where: { shoeId: { in: owned.map(item => item.shoeId) }, productions: { none: {} } } });
         await db.shoe.deleteMany({ where: { id: { in: owned.map(item => item.shoeId) }, productions: { none: {} } } });
         await db.employeeProcess.deleteMany({ where: { employeeId } });
         await db.employee.delete({ where: { id: employeeId } });

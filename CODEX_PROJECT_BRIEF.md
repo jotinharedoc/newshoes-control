@@ -199,15 +199,16 @@ O modelo existente se chama `ManagementSession`, embora a sessão já seja usada
 
 ## 8. Código do tênis e ciclo de entrada
 
-- Cada entrada do tênis na New Shoes recebe um código aleatório novo.
-- O código serve somente para identificar aquele tênis naquele ciclo interno.
+- Código visível é uma string numérica de 1 a 64 dígitos, preservando zeros à esquerda, e pode ser reutilizado indefinidamente.
+- `Shoe` cadastra o código único; `ShoeOccurrence` identifica cada tênis/ciclo físico com sequência por código.
+- Higienização, Finalização e Pintura do mesmo tênis compartilham a ocorrência escolhida na confirmação.
+- “Novo tênis” cria uma ocorrência independente; nenhum histórico anterior exige cancelamento para permitir novo uso.
+- Continuação, retomada, reabertura e retorno de qualidade preservam a ocorrência original.
 - Não cadastrar modelo, marca, cor, foto ou cliente nesta primeira versão.
-- O mesmo código passa por Higienização, Finalização e, quando necessário, Pintura.
-- Todo tênis sempre passa por Higienização e Finalização.
-- Pintura é opcional.
-- Se o mesmo calçado voltar meses depois para um novo serviço, recebe outro código e vira outra entrada.
-
-Decisão confirmada por João: quando for retorno por problema, o tênis mantém o mesmo código original e o mesmo registro de `Shoe`. O retrabalho é registrado como uma nova produção de tipo `RETURN`, vinculada à produção original, com motivo obrigatório e sem gerar nova comissão.
+- Todo tênis passa por Higienização e Finalização; Pintura é opcional.
+- Retorno é uma produção `RETURN` ligada à produção original, com motivo obrigatório e sem nova comissão.
+- Gerência pode anular com motivo e confirmação, preservando sessões e ledger. Anulados ficam na auditoria e fora dos cálculos.
+- Restauração nesta versão aceita somente registros anulados a partir de `COMPLETED`, conservando a identidade e a comissão original.
 
 ---
 

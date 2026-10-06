@@ -5,7 +5,7 @@ import { prisma } from "./fake-prisma";
 
 type Session = { id: string; kind: SessionKind; startedAt: Date; endedAt: Date | null; endReason: string | null };
 export type WorkRecord = {
-  id: string; employeeId: string; processTypeId: string; shoeId: string;
+  id: string; employeeId: string; processTypeId: string; shoeId: string; occurrenceId?: string;
   kind: ProductionKind; status: ProductionStatus; unit: WorkUnit; version: number;
   sourceProductionId: string | null; returnReason: string | null;
   commissionAmountSnapshot: Prisma.Decimal; startedAt: Date; completedAt: Date | null;
@@ -23,6 +23,17 @@ export function workflowFixture() {
   const breaks: Break[] = [];
   const commissions: { productionId: string; amount: string }[] = [];
   const shoes = new Map<string, string>();
+  const occurrences: { id: string; shoeId: string; sequence: number }[] = [];
+  mock.method(prisma, "$queryRaw", async () => []);
+  mock.method(prisma.shoeOccurrence, "findFirst", async (args: Prisma.ShoeOccurrenceFindFirstArgs) => {
+    const row = occurrences.filter(row => matches(row, args.where as Record<string, unknown>)).at(-1);
+    return row ? { ...row, productions: records.filter(r => r.occurrenceId === row.id && r.kind === "STANDARD" && r.status !== "CANCELLED") } : null;
+  });
+  mock.method(prisma.shoeOccurrence, "create", async (args: Prisma.ShoeOccurrenceCreateArgs) => {
+    const data = args.data as Prisma.ShoeOccurrenceUncheckedCreateInput;
+    const row = { id: `occurrence-${occurrences.length+1}`, shoeId: data.shoeId, sequence: data.sequence };
+    occurrences.push(row); return row;
+  });
   const processes = ["Higienização", "Finalização", "Pintura"].map(name => ({
     id: name, name,
     rules: (name === "Finalização" ? ["PAIR", "LEFT_FOOT", "RIGHT_FOOT"] : ["PAIR"]).map(unit => ({
@@ -73,7 +84,7 @@ export function workflowFixture() {
     const initialSession = data.sessions?.create as Prisma.WorkSessionCreateWithoutProductionInput | undefined;
     const record: WorkRecord = {
       id: `work-${++sequence}`, employeeId: data.employeeId, processTypeId: data.processTypeId,
-      shoeId: data.shoeId, kind: data.kind, unit: data.unit,
+      shoeId: data.shoeId, occurrenceId: data.occurrenceId ?? undefined, kind: data.kind, unit: data.unit,
       status: data.status ?? "IN_PROGRESS", version: 0,
       sourceProductionId: data.sourceProductionId ?? null, returnReason: data.returnReason ?? null,
       commissionAmountSnapshot: new Prisma.Decimal(data.commissionAmountSnapshot.toString()),
