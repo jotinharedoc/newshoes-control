@@ -1,6 +1,4 @@
 "use client";
-import { OccurrenceChoice } from "./occurrence-choice";
-import type { OccurrenceChoice as Choice } from "@/services/shoe-occurrence.service";
 
 import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
 
@@ -124,7 +122,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
   const [code, setCode] = useState("");
   const [occurrenceChoice, setOccurrenceChoice] = useState<Choice>();
   const [unit, setUnit] = useState<Unit>("PAIR");
-  const [confirming, setConfirming] = useState(false);
+  
 
   const requestInProgress = useRef(false);
 
@@ -175,7 +173,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
   }
 
   async function start() {
-    if (requestInProgress.current || !snapshot || !occurrenceChoice) return;
+    if (requestInProgress.current || !snapshot) return;
 
     if (!validCode) {
       setError(SHOE_CODE_ERROR);
@@ -188,12 +186,7 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
     setMessage("");
 
     try {
-      const nextSnapshot = await requestOverview("POST", {
-        code: code.trim(),
-        ...occurrenceChoice,
-        unit,
-        kind: "STANDARD",
-      });
+      
 
       applySnapshot(nextSnapshot);
       setConfirming(false);
@@ -386,11 +379,11 @@ export function FinalizationReader({ employeeName, canUseBreaks, initialOverview
                 </div>
               </dl>
 
-              <OccurrenceChoice key={code} code={code} onChange={setOccurrenceChoice} />
+        
               <button
                 type="button"
                 onClick={() => void start()}
-                disabled={busy || !validCode || !occurrenceChoice}
+                disabled={busy || !validCode}
                 className={primary}
               >
                 {busy ? "Salvando..." : "Confirmar e iniciar"}
