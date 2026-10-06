@@ -1,6 +1,5 @@
 "use client";
-import { OccurrenceChoice } from "./occurrence-choice";
-import type { OccurrenceChoice as Choice } from "@/services/shoe-occurrence.service";
+
 
 import { isValidShoeCode, SHOE_CODE_ERROR } from "@/utils/shoe-code";
 
@@ -75,7 +74,6 @@ export function PaintingReader({
 }: PaintingReaderProps) {
   const [overview, setOverview] = useState(initialOverview);
   const [code, setCode] = useState("");
-  const [occurrenceChoice, setOccurrenceChoice] = useState<Choice>();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -176,16 +174,15 @@ export function PaintingReader({
   }
 
   function startProduction() {
-    if (!validCode || !occurrenceChoice) return;
+    if (!validCode) return;
 
     void send(
       "POST",
       {
-        code,
-        ...occurrenceChoice,
-        kind: "STANDARD",
-        unit: "PAIR",
-      },
+  code,
+  kind: "STANDARD",
+  unit: "PAIR",
+},
       "Pintura iniciada e salva.",
     );
   }
@@ -335,10 +332,10 @@ export function PaintingReader({
               Voltar e corrigir
             </button>
 
-            <OccurrenceChoice key={code} code={code} onChange={setOccurrenceChoice} />
+          
             <button
               type="button"
-              disabled={busy || !occurrenceChoice}
+              disabled={busy || !validCode}
               onClick={startProduction}
               className="primary-button w-full disabled:opacity-50"
             >
